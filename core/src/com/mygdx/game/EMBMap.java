@@ -29,20 +29,30 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.mongodb.client.FindIterable;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
 import com.mygdx.game.lang.Context;
 import com.mygdx.game.lang.Renderer;
+import com.mygdx.game.utils.Config;
 import com.mygdx.game.utils.Constants;
 import com.mygdx.game.utils.Geolocation;
+import com.mygdx.game.utils.Location;
 import com.mygdx.game.utils.MapRasterTiles;
+import com.mygdx.game.utils.MongoDBManager;
 import com.mygdx.game.utils.ZoomXY;
+
+import org.bson.Document;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class EMBMap extends ApplicationAdapter implements GestureDetector.GestureListener {
-
+    private MongoDBManager mongoDBManager;
     private ShapeRenderer shapeRenderer;
     private Vector3 touchPosition;
 
@@ -64,6 +74,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     // animation
     private Stage stage;
     private FitViewport viewport;
+    List<Location> locations = new ArrayList<>();
 
     // boat animation
     Geolocation[] boatCoordinates = {
@@ -83,6 +94,50 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
     @Override
     public void create() {
+        // connect to MongoDB
+        String mongodbUrl = Config.getMongoDBUrl();
+
+        // connect to MongoDB using the retrieved URL
+        mongoDBManager = new MongoDBManager(mongodbUrl, "cupinja");
+
+        if (mongoDBManager.testConnection()) {
+            System.out.println("Connected to MongoDB successfully!");
+
+            MongoDatabase database = mongoDBManager.getDatabase();
+
+            MongoCollection<Document> collection = database.getCollection("locations");
+
+            FindIterable<Document> documents = collection.find();
+            for (Document document : documents) {
+                String institution = document.getString("institution");
+                String city = document.getString("city");
+                String street = document.getString("street");
+
+                Double lat = document.getDouble("x");
+                Double lng = document.getDouble("y");
+
+                if (lat != null && lng != null) {
+                    Geolocation geolocation = new Geolocation(lat, lng);
+                    Location location = new Location(institution, city, street, geolocation);
+                    locations.add(location);
+                } else {
+                    System.out.println("Skipping document with missing or null lat/lng values.");
+                }
+            }
+
+        } else {
+            System.out.println("Failed to connect to MongoDB.");
+        }
+
+        for (Location location : locations) {
+            System.out.println("Location:");
+            System.out.println("Institution: " + location.getInstitution());
+            System.out.println("City: " + location.getCity());
+            System.out.println("Street: " + location.getStreet());
+            System.out.println("Geolocation: " + location.getGeolocation().lat + ", " + location.getGeolocation().lng);
+            System.out.println("-------------");
+        }
+
         shapeRenderer = new ShapeRenderer();
 
         camera = new OrthographicCamera();
@@ -170,22 +225,17 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     }
 
     private void drawMarkers() {
-        Vector2 marker = MapRasterTiles.getPixelPosition(MARKER_GEOLOCATION.lat, MARKER_GEOLOCATION.lng, beginTile.x, beginTile.y);
-
         shapeRenderer.setProjectionMatrix(camera.combined);
         shapeRenderer.setColor(Color.RED);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-        shapeRenderer.circle(marker.x, marker.y, 10);
-        shapeRenderer.end();
 
-        // boat positions
-        /*for(int i=0; i<boatAnimation.getInterpolatedPositions().length; i++){
-            shapeRenderer.setProjectionMatrix(camera.combined);
-            shapeRenderer.setColor(Color.RED);
-            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-            shapeRenderer.circle(boatAnimation.getInterpolatedPositions()[i].x, boatAnimation.getInterpolatedPositions()[i].y, 10);
-            shapeRenderer.end();
-        }*/
+        for (Location location : locations) {
+            Geolocation geolocation = location.getGeolocation();
+            Vector2 marker = MapRasterTiles.getPixelPosition(geolocation.lat, geolocation.lng, beginTile.x, beginTile.y);
+            shapeRenderer.circle(marker.x, marker.y, 10);
+        }
+
+        shapeRenderer.end();
     }
 
     @Override
