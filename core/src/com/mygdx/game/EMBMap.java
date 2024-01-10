@@ -32,8 +32,7 @@ import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
-import com.mygdx.game.lang.Context;
-import com.mygdx.game.lang.Renderer;
+import com.mygdx.game.lang.LangKt;
 import com.mygdx.game.utils.Config;
 import com.mygdx.game.utils.Constants;
 import com.mygdx.game.utils.Geolocation;
@@ -74,6 +73,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     // animation
     private Stage stage;
     private FitViewport viewport;
+    private Boolean ranOnce = false;
     List<Location> locations = new ArrayList<>();
 
     // boat animation
@@ -214,13 +214,9 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         drawMarkers();
 
         // lang
-        if(showLangExample){
-            Renderer renderer = new Renderer();
-            try {
-                renderer.render(new FileInputStream(new File("program.txt")), new Context(shapeRenderer, camera, beginTile));
-            } catch (FileNotFoundException e) {
-                throw new RuntimeException(e);
-            }
+        if(showLangExample && !ranOnce){
+            LangKt.run();
+            ranOnce = true;
         }
     }
 
@@ -334,6 +330,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             @Override
             public void clicked(InputEvent event, float x, float y) {
                 showLangExample = !showLangExample;
+                ranOnce = false;
             }
         });
 
