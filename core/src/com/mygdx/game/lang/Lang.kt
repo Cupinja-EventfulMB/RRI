@@ -651,7 +651,7 @@ class Parser(private val scanner: Scanner, private var ctx: Context) {
     fun parse(): Boolean {
         ctx.shapeRenderer.setProjectionMatrix(ctx.camera.combined);
         ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Filled)
-        ctx.shapeRenderer.color = Color.BLACK
+        ctx.shapeRenderer.color = Color.BLUE
         last = scanner.getToken()
         val status = City()
 
@@ -982,29 +982,14 @@ class Parser(private val scanner: Scanner, private var ctx: Context) {
                             val firstLine = line.second
                             val secondLine = line.third
                             if (recognizeTerminal(RCPAREN)) {
+                                val markerFirstBendLine = MapRasterTiles.getPixelPosition(bendCoordinates?.get(0)!!.longtitude, bendCoordinates?.get(0)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                                val markerFirstLine = MapRasterTiles.getPixelPosition(firstLine!!.longtitude, firstLine!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                                val markerSecondLine = MapRasterTiles.getPixelPosition(secondLine!!.longtitude, secondLine!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
 
-                                val markerFirstLine = MapRasterTiles.getPixelPosition(
-                                    firstLine!!.longtitude,
-                                    firstLine!!.latitude,
-                                    ctx.beginTile.x,
-                                    ctx.beginTile.y
-                                )
-
-                                val markerSecondLine = MapRasterTiles.getPixelPosition(
-                                    secondLine!!.longtitude,
-                                    secondLine!!.latitude,
-                                    ctx.beginTile.x,
-                                    ctx.beginTile.y
-                                )
-
+                                ctx.shapeRenderer.line(markerFirstBendLine.x, markerFirstBendLine.y, markerFirstLine.x, markerFirstLine.y)
                                 ctx.shapeRenderer.line(markerFirstLine.x, markerFirstLine.y, markerSecondLine.x, markerSecondLine.y)
 
-                                val marker = MapRasterTiles.getPixelPosition(
-                                    firstLine!!.longtitude,
-                                    firstLine!!.latitude,
-                                    ctx.beginTile.x,
-                                    ctx.beginTile.y
-                                )
+
                                 geoJSON += "\n\t{\n" +
                                         "  \t\t\"type\": \"Feature\",\n" +
                                         "  \t\t\"properties\": {\n" +
@@ -1099,10 +1084,8 @@ class Parser(private val scanner: Scanner, private var ctx: Context) {
                                         ctx.beginTile.y
                                     )
 
-                                    ctx.shapeRenderer.circle(markerFirstLine.x, markerFirstLine.y, 10f)
-                                    ctx.shapeRenderer.circle(markerSecondLine.x, markerSecondLine.y, 10f)
-                                    ctx.shapeRenderer.circle(markerThirdLine.x, markerThirdLine.y, 10f)
-                                    ctx.shapeRenderer.circle(markerFourthLine.x, markerFourthLine.y, 10f)
+                                    ctx.shapeRenderer.triangle(markerFirstLine.x, markerFirstLine.y, markerSecondLine.x, markerSecondLine.y, markerThirdLine.x, markerThirdLine.y)
+                                    ctx.shapeRenderer.triangle(markerFirstLine.x, markerFirstLine.y, markerFourthLine.x, markerFourthLine.y, markerThirdLine.x, markerThirdLine.y)
 
                                     geoJSON += "\n\t{\n" +
                                             "  \t\t\"type\": \"Feature\",\n" +
@@ -1167,6 +1150,22 @@ class Parser(private val scanner: Scanner, private var ctx: Context) {
                     if (block.first) {
                         if (recognizeTerminal(RCPAREN)) {
                             var list = block.second
+                            val markerFirstLine = MapRasterTiles.getPixelPosition(list?.get(0)!!.longtitude, list?.get(0)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerSecondLine = MapRasterTiles.getPixelPosition(list?.get(1)!!.longtitude, list?.get(1)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerThirdLine = MapRasterTiles.getPixelPosition(list?.get(2)!!.longtitude, list?.get(2)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerFourthLine = MapRasterTiles.getPixelPosition(list?.get(3)!!.longtitude, list?.get(3)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val vertices = floatArrayOf(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerSecondLine.x, markerSecondLine.y,
+                                markerThirdLine.x, markerThirdLine.y,
+                                markerFourthLine.x, markerFourthLine.y,
+                                markerFirstLine.x, markerFirstLine.y
+                            )
+                            ctx.shapeRenderer.end()
+                            ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Line)
+                            ctx.shapeRenderer.polyline(vertices, 0, vertices.size)
+                            ctx.shapeRenderer.end()
+                            ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Filled)
                             geoJSON += "\n\t{\n" +
                                     "  \t\t\"type\": \"Feature\",\n" +
                                     "  \t\t\"properties\": {\n" +
@@ -1215,7 +1214,14 @@ class Parser(private val scanner: Scanner, private var ctx: Context) {
                 if (recognizeTerminal(LCPAREN) && InsideOperations(true)) {
                     var point = Point()
                     if (point.first && recognizeTerminal(RCPAREN)) {
+                        val marker = MapRasterTiles.getPixelPosition(
+                            point.second!!.longtitude,
+                            point.second!!.latitude,
+                            ctx.beginTile.x,
+                            ctx.beginTile.y
+                        )
 
+                        ctx.shapeRenderer.circle(marker.x, marker.y, 5f)
                         geoJSON += "\n\t{\n" +
                                 "  \t\t\"type\": \"Feature\",\n" +
                                 "  \t\t\"properties\": {\n" +
@@ -1263,6 +1269,34 @@ class Parser(private val scanner: Scanner, private var ctx: Context) {
                     if (circle.first) {
                         var coords = generateCirclePolygon(circle.second!!, circle.third!!, 20)
                         if (recognizeTerminal(RCPAREN)) {
+                            val markerFirstLine = MapRasterTiles.getPixelPosition(coords?.get(0)!!.longtitude, coords?.get(0)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerSecondLine = MapRasterTiles.getPixelPosition(coords?.get(1)!!.longtitude, coords?.get(1)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerThirdLine = MapRasterTiles.getPixelPosition(coords?.get(2)!!.longtitude, coords?.get(2)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerFourthLine = MapRasterTiles.getPixelPosition(coords?.get(3)!!.longtitude, coords?.get(3)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerFifthLine = MapRasterTiles.getPixelPosition(coords?.get(4)!!.longtitude, coords?.get(4)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerSixthLine = MapRasterTiles.getPixelPosition(coords?.get(5)!!.longtitude, coords?.get(5)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerSeventhLine = MapRasterTiles.getPixelPosition(coords?.get(6)!!.longtitude, coords?.get(6)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerEighthLine = MapRasterTiles.getPixelPosition(coords?.get(7)!!.longtitude, coords?.get(7)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerNinethLine = MapRasterTiles.getPixelPosition(coords?.get(8)!!.longtitude, coords?.get(8)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerTenthLine = MapRasterTiles.getPixelPosition(coords?.get(9)!!.longtitude, coords?.get(9)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val vertices = floatArrayOf(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerSecondLine.x, markerSecondLine.y,
+                                markerThirdLine.x, markerThirdLine.y,
+                                markerFourthLine.x, markerFourthLine.y,
+                                markerFifthLine.x, markerFifthLine.y,
+                                markerSixthLine.x, markerSixthLine.y,
+                                markerSeventhLine.x, markerSeventhLine.y,
+                                markerEighthLine.x, markerEighthLine.y,
+                                markerNinethLine.x, markerNinethLine.y,
+                                markerTenthLine.x, markerTenthLine.y,
+                                markerFirstLine.x, markerFirstLine.y
+                            )
+                            ctx.shapeRenderer.end()
+                            ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Line)
+                            ctx.shapeRenderer.polygon(vertices, 0, vertices.size)
+                            ctx.shapeRenderer.end()
+                            ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Filled)
                             geoJSON += "\n\t{\n" +
                                     "  \t\t\"type\": \"Feature\",\n" +
                                     "  \t\t\"properties\": {\n" +

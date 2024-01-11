@@ -212,6 +212,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         hudStage.draw();
         stage.draw();
 
+        drawMarkers();
         // lang
         if(showLangExample){
             LangKt.run(new Context(shapeRenderer, camera, beginTile));
