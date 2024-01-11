@@ -1,14 +1,17 @@
 package com.mygdx.game.lang
 
-import java.io.InputStream
-import java.io.File
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.PI
+import com.badlogic.gdx.graphics.Camera
+import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer
+import com.mygdx.game.utils.MapRasterTiles
+import com.mygdx.game.utils.ZoomXY
 import org.json.JSONArray
 import org.json.JSONObject
-
-import java.util.regex.Pattern
+import java.io.File
+import java.io.InputStream
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 const val ERROR_STATE = 0
 
@@ -628,7 +631,9 @@ fun printTokens(scanner: Scanner) {
 
 data class Coordinate(val name: String, var longtitude: Double, var latitude: Double)
 
-class Parser(private val scanner: Scanner) {
+data class Context(val shapeRenderer: ShapeRenderer, val camera: Camera, val beginTile: ZoomXY)
+
+class Parser(private val scanner: Scanner, private var ctx: Context) {
     private var last: Token? = null
     private var geoJSON : String = "{\n\t\"type\": \"FeatureCollection\",\n\t\"features\": ["
     var fileName = "city.geojson"
@@ -644,6 +649,9 @@ class Parser(private val scanner: Scanner) {
     private var insideVariableCoordPair: MutableList<Coordinate> = mutableListOf()
 
     fun parse(): Boolean {
+        ctx.shapeRenderer.setProjectionMatrix(ctx.camera.combined);
+        ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Filled)
+        ctx.shapeRenderer.color = Color.BLACK
         last = scanner.getToken()
         val status = City()
 
@@ -673,6 +681,7 @@ class Parser(private val scanner: Scanner) {
         geoJSON = geoJSON.substring(0, geoJSON.length-2)
         geoJSON += "\n\t]\n}"
         file.writeText(geoJSON)
+        ctx.shapeRenderer.end();
         translateGeoJsonFromFile("city.geojson")
         return when (last?.symbol) {
             EOF_SYMBOL -> status
@@ -973,6 +982,29 @@ class Parser(private val scanner: Scanner) {
                             val firstLine = line.second
                             val secondLine = line.third
                             if (recognizeTerminal(RCPAREN)) {
+
+                                val markerFirstLine = MapRasterTiles.getPixelPosition(
+                                    firstLine!!.longtitude,
+                                    firstLine!!.latitude,
+                                    ctx.beginTile.x,
+                                    ctx.beginTile.y
+                                )
+
+                                val markerSecondLine = MapRasterTiles.getPixelPosition(
+                                    secondLine!!.longtitude,
+                                    secondLine!!.latitude,
+                                    ctx.beginTile.x,
+                                    ctx.beginTile.y
+                                )
+
+                                ctx.shapeRenderer.line(markerFirstLine.x, markerFirstLine.y, markerSecondLine.x, markerSecondLine.y)
+
+                                val marker = MapRasterTiles.getPixelPosition(
+                                    firstLine!!.longtitude,
+                                    firstLine!!.latitude,
+                                    ctx.beginTile.x,
+                                    ctx.beginTile.y
+                                )
                                 geoJSON += "\n\t{\n" +
                                         "  \t\t\"type\": \"Feature\",\n" +
                                         "  \t\t\"properties\": {\n" +
@@ -1038,6 +1070,40 @@ class Parser(private val scanner: Scanner) {
                             if (block.first) {
                                 var list = block.second
                                 if (recognizeTerminal(RCPAREN)) {
+
+                                    val markerFirstLine = MapRasterTiles.getPixelPosition(
+                                        list?.get(0)!!.longtitude,
+                                        list?.get(0)!!.latitude,
+                                        ctx.beginTile.x,
+                                        ctx.beginTile.y
+                                    )
+
+                                    val markerSecondLine = MapRasterTiles.getPixelPosition(
+                                        list?.get(1)!!.longtitude,
+                                        list?.get(1)!!.latitude,
+                                        ctx.beginTile.x,
+                                        ctx.beginTile.y
+                                    )
+
+                                    val markerThirdLine = MapRasterTiles.getPixelPosition(
+                                        list?.get(2)!!.longtitude,
+                                        list?.get(2)!!.latitude,
+                                        ctx.beginTile.x,
+                                        ctx.beginTile.y
+                                    )
+
+                                    val markerFourthLine = MapRasterTiles.getPixelPosition(
+                                        list?.get(3)!!.longtitude,
+                                        list?.get(3)!!.latitude,
+                                        ctx.beginTile.x,
+                                        ctx.beginTile.y
+                                    )
+
+                                    ctx.shapeRenderer.circle(markerFirstLine.x, markerFirstLine.y, 10f)
+                                    ctx.shapeRenderer.circle(markerSecondLine.x, markerSecondLine.y, 10f)
+                                    ctx.shapeRenderer.circle(markerThirdLine.x, markerThirdLine.y, 10f)
+                                    ctx.shapeRenderer.circle(markerFourthLine.x, markerFourthLine.y, 10f)
+
                                     geoJSON += "\n\t{\n" +
                                             "  \t\t\"type\": \"Feature\",\n" +
                                             "  \t\t\"properties\": {\n" +
@@ -1898,10 +1964,6 @@ class Parser(private val scanner: Scanner) {
 
 }
 
-fun run() {
-    if (Parser(Scanner(ForForeachFFFAutomaton, File("test.txt").inputStream())).parse()) {
-        println("accept")
-    } else {
-        println("reject")
-    }
+fun run(ctx: Context) {
+    Parser(Scanner(ForForeachFFFAutomaton, File("test.txt").inputStream()), ctx).parse()
 }

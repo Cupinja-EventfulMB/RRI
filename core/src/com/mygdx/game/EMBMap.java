@@ -32,6 +32,7 @@ import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mygdx.game.lang.Context;
 import com.mygdx.game.lang.LangKt;
 import com.mygdx.game.utils.Config;
 import com.mygdx.game.utils.Constants;
@@ -211,11 +212,9 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         hudStage.draw();
         stage.draw();
 
-        drawMarkers();
-
         // lang
-        if(showLangExample && !ranOnce){
-            LangKt.run();
+        if(showLangExample){
+            LangKt.run(new Context(shapeRenderer, camera, beginTile));
             ranOnce = true;
         }
     }
