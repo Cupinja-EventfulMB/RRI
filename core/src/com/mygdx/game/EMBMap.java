@@ -4,7 +4,6 @@ import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.InputMultiplexer;
-import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -17,16 +16,22 @@ import com.badlogic.gdx.maps.tiled.TiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.tiles.StaticTiledMapTile;
+import com.badlogic.gdx.math.Interpolation;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.scenes.scene2d.Action;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.actions.Actions;
+import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.mongodb.client.FindIterable;
@@ -44,12 +49,10 @@ import com.mygdx.game.utils.ZoomXY;
 
 import org.bson.Document;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class EMBMap extends ApplicationAdapter implements GestureDetector.GestureListener {
     private MongoDBManager mongoDBManager;
@@ -75,6 +78,8 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     private Stage stage;
     private FitViewport viewport;
     private Boolean ranOnce = false;
+    private boolean eventAnimationVisible = false;
+
     List<Location> locations = new ArrayList<>();
 
     // boat animation
@@ -92,6 +97,17 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
     // test marker
     private final Geolocation MARKER_GEOLOCATION = new Geolocation(46.559070, 15.638100);
+    // marker and dialog institution
+    private Array<Texture> markerInstitutionTextures;
+    private Dialog markerInfoDialog;
+
+    private void loadTexturesAndSkin(){
+        markerInstitutionTextures = new Array<>();
+        markerInstitutionTextures.add(new Texture(Gdx.files.internal("assets/institution.png")));
+
+        skin = new Skin(Gdx.files.internal("ui/uiskin.json"));
+
+    }
 
     @Override
     public void create() {
@@ -139,6 +155,8 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             System.out.println("-------------");
         }
 
+        loadTexturesAndSkin();
+
         shapeRenderer = new ShapeRenderer();
 
         camera = new OrthographicCamera();
@@ -183,7 +201,6 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         tiledMapRenderer = new OrthogonalTiledMapRenderer(tiledMap);
 
         // buttons
-        skin = new Skin(Gdx.files.internal("ui/uiskin.json"));
         hudStage = new Stage(hudViewport, spriteBatch);
         hudStage.addActor(createButtons());
 
@@ -193,6 +210,12 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         boatAnimation = new BoatAnimation(boatCoordinates, beginTile, 5);
         stage = new Stage(viewport, spriteBatch);
         stage.addActor(boatAnimation.create());
+
+        // dialog instituton
+        markerInfoDialog = new Dialog("Institution Information", skin);
+        markerInfoDialog.text("Institution: ");
+        markerInfoDialog.button("Exit", "exit");
+
     }
 
     @Override
@@ -206,33 +229,65 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         tiledMapRenderer.setView(camera);
         tiledMapRenderer.render();
 
+        drawMarkers(spriteBatch);
+
         hudStage.act(Gdx.graphics.getDeltaTime());
         stage.act(Gdx.graphics.getDeltaTime());
 
         hudStage.draw();
         stage.draw();
 
-        drawMarkers();
         // lang
-        if(showLangExample){
+        if (showLangExample) {
             LangKt.run(new Context(shapeRenderer, camera, beginTile));
             ranOnce = true;
         }
     }
 
-    private void drawMarkers() {
+
+    private void drawMarkers(SpriteBatch spriteBatch) {
         shapeRenderer.setProjectionMatrix(camera.combined);
-        shapeRenderer.setColor(Color.RED);
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        shapeRenderer.setAutoShapeType(true);
+
+        spriteBatch.begin();
 
         for (Location location : locations) {
             Geolocation geolocation = location.getGeolocation();
             Vector2 marker = MapRasterTiles.getPixelPosition(geolocation.lat, geolocation.lng, beginTile.x, beginTile.y);
-            shapeRenderer.circle(marker.x, marker.y, 10);
-        }
+            spriteBatch.draw(markerInstitutionTextures.first(), marker.x, marker.y, 100, 100);
 
-        shapeRenderer.end();
+            // the marker is clicked
+            if (Gdx.input.justTouched()) {
+                Vector3 touchPos = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
+                camera.unproject(touchPos);
+                if (marker.x <= touchPos.x && touchPos.x <= marker.x + 100 &&
+                        marker.y <= touchPos.y && touchPos.y <= marker.y + 100) {
+                    showMarkerInfo(location);
+                }
+            }
+        }
+        spriteBatch.end();
     }
+
+    private void showMarkerInfo(Location location) {
+        markerInfoDialog.getContentTable().clear();
+        markerInfoDialog.text(location.getInstitution() + ",");
+        markerInfoDialog.text(location.getStreet() + " ");
+        markerInfoDialog.text(location.getCity());
+
+        markerInfoDialog.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                if (event.getTarget().getName() != null && event.getTarget().getName().equals("exit")) {
+                    markerInfoDialog.hide();
+                }
+            }
+        });
+
+        markerInfoDialog.show(hudStage);
+    }
+
+
 
     @Override
     public void dispose() {
@@ -321,11 +376,134 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         camera.position.y = MathUtils.clamp(camera.position.y, effectiveViewportHeight / 2f, Constants.MAP_HEIGHT - effectiveViewportHeight / 2f);
     }
 
+    public Actor createDiscoBall(Geolocation location) {
+        Image discoBall = new Image(new Texture("assets/discoBall.png"));
+        discoBall.setWidth(70f);
+        discoBall.setHeight(70f);
+
+        Vector2 position = MapRasterTiles.getPixelPosition(location.lat, location.lng, beginTile.x, beginTile.y);
+        float shiftAmount = 40f; // Adjust this value as needed
+        discoBall.setPosition(position.x - shiftAmount, position.y);
+
+        // Add a bouncing animation
+        float bounceHeight = 10f; // Adjust this value to control the bounce height
+        float duration = 1.0f; // Adjust this value to control the duration of the bounce
+
+        discoBall.addAction(Actions.sequence(
+                Actions.moveBy(0, bounceHeight, duration / 2, Interpolation.linear),
+                Actions.moveBy(0, -bounceHeight, duration / 2, Interpolation.linear),
+                Actions.forever(
+                        Actions.sequence(
+                                Actions.moveBy(0, bounceHeight, duration / 2, Interpolation.linear),
+                                Actions.moveBy(0, -bounceHeight, duration / 2, Interpolation.linear)
+                        )
+                )
+        ));
+
+        stage.addActor(discoBall);
+
+        return discoBall;
+    }
+    public Actor createMasks(Geolocation location) {
+        Image masks = new Image(new Texture("assets/masks.png"));
+        masks.setWidth(70f);
+        masks.setHeight(70f);
+
+        Vector2 position = MapRasterTiles.getPixelPosition(location.lat, location.lng, beginTile.x, beginTile.y);
+        float shiftAmount = 30f;
+        masks.setPosition(position.x - shiftAmount, position.y);
+
+        float targetRotation = 100f;
+        float rotationDuration = 2.0f;
+
+        Action rotationAction = Actions.forever(
+                Actions.sequence(
+                        Actions.rotateTo(targetRotation, rotationDuration),
+                        Actions.rotateTo(0, rotationDuration)
+                )
+        );
+
+        masks.addAction(rotationAction);
+
+        stage.addActor(masks);
+
+        return masks;
+    }
+
+    public Actor createMicrophones(Geolocation location) {
+        Image microphones = new Image(new Texture("assets/microphone.png"));
+        microphones.setWidth(50f);
+        microphones.setHeight(50f);
+
+        Vector2 position = MapRasterTiles.getPixelPosition(location.lat, location.lng, beginTile.x, beginTile.y);
+        float shiftAmount = -100f;
+        microphones.setPosition(position.x - shiftAmount, position.y);
+
+        float targetScale = 1.5f;
+        float scaleDuration = 0.8f;
+
+        Action scaleAction = Actions.forever(
+                Actions.sequence(
+                        Actions.scaleTo(targetScale, targetScale, scaleDuration),
+                        Actions.scaleTo(1.0f, 1.0f, scaleDuration)
+                )
+        );
+
+        microphones.addAction(scaleAction);
+
+        stage.addActor(microphones);
+
+        return microphones;
+    }
+
+    private void createEventAnimation() {
+        for (Location location : locations) {
+            if(Objects.equals(location.getInstitution(), "Stuk")){
+                createDiscoBall(location.getGeolocation());
+            } else if (Objects.equals(location.getInstitution(), "SNG") || Objects.equals(location.getInstitution(), "Lutkovno gledalisce") || Objects.equals(location.getInstitution(), "Narodni dom Maribor") || Objects.equals(location.getInstitution(), "ODER MINORITI")){ /// add the otherqqqq
+                createMasks(location.getGeolocation());
+            } else if (Objects.equals(location.getInstitution(), "Festivalna dvorana Lent Maribor")|| Objects.equals(location.getInstitution(), "Dvorana Tabor")) {
+                createMicrophones(location.getGeolocation());
+            }
+        }
+    }
+
+    private void clearEventAnimation() {
+        Array<Actor> discoBalls = stage.getActors();
+        Array<Actor> discoBallsToRemove = new Array<>();
+        Array<Actor> masks = stage.getActors();
+        Array<Actor> masksToRemove = new Array<>();
+        Array<Actor> microphones = stage.getActors();
+        Array<Actor> microphonesToRemove = new Array<>();
+
+        for (Actor discoBall : discoBalls) {
+            discoBallsToRemove.add(discoBall);
+        }
+        for (Actor mask : masks) {
+            masksToRemove.add(mask);
+        }
+        for (Actor microphone : microphones) {
+            microphonesToRemove.add(microphone);
+        }
+
+        // Remove all disco balls collected in the separate list added because of the unexpected behaviour
+        for (Actor discoBall : discoBallsToRemove) {
+            discoBall.remove();
+        }
+        for (Actor mask : masksToRemove) {
+            mask.remove();
+        }
+        for (Actor microphone : microphonesToRemove) {
+            microphone.remove();
+        }
+    }
+
+
     private Actor createButtons() {
         Table table = new Table();
         table.defaults().pad(20);
 
-        TextButton langButton = new TextButton("Lang", skin, "toggle");
+        TextButton langButton = new TextButton("Lang", skin, "round");
         langButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
@@ -334,7 +512,21 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             }
         });
 
-        TextButton animButton = new TextButton("Animation", skin);
+        TextButton eventButton = new TextButton("Events", skin, "round");
+        eventButton.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                if (eventAnimationVisible) {
+                    clearEventAnimation();
+                } else {
+                    createEventAnimation();
+
+                }
+                eventAnimationVisible = !eventAnimationVisible;
+            }
+        });
+
+        TextButton animButton = new TextButton("Animation", skin, "round");
         animButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
@@ -342,7 +534,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             }
         });
 
-        TextButton quitButton = new TextButton("Quit", skin);
+        TextButton quitButton = new TextButton("Quit", skin, "round");
         quitButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
@@ -354,13 +546,13 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         buttonTable.defaults().padLeft(30).padRight(30);
 
         buttonTable.add(langButton).padBottom(15).expandX().fill().row();
+        buttonTable.add(eventButton).padBottom(15).expandX().fill().row();
         buttonTable.add(animButton).padBottom(15).fillX().row();
         buttonTable.add(quitButton).fillX();
 
 
         table.add(buttonTable);
-        table.left();
-        table.top();
+        table.left().bottom();
         table.setFillParent(true);
         table.pack();
 
