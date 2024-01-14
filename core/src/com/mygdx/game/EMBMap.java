@@ -117,6 +117,8 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         // connect to MongoDB using the retrieved URL
         mongoDBManager = new MongoDBManager(mongodbUrl, "cupinja");
 
+        MapRasterTiles.loadTileCache();
+
         if (mongoDBManager.testConnection()) {
             System.out.println("Connected to MongoDB successfully!");
 
@@ -174,11 +176,13 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         touchPosition = new Vector3();
 
         try {
-            //in most cases, geolocation won't be in the center of the tile because tile borders are predetermined (geolocation can be at the corner of a tile)
+            System.out.println("Cache size before fetching tiles: " + MapRasterTiles.getTileCacheSize());
+
             ZoomXY centerTile = MapRasterTiles.getTileNumber(CENTER_GEOLOCATION.lat, CENTER_GEOLOCATION.lng, Constants.ZOOM);
             mapTiles = MapRasterTiles.getRasterTileZone(centerTile, Constants.NUM_TILES);
-            //you need the beginning tile (tile on the top left corner) to convert geolocation to a location in pixels.
             beginTile = new ZoomXY(Constants.ZOOM, centerTile.x - ((Constants.NUM_TILES - 1) / 2), centerTile.y - ((Constants.NUM_TILES - 1) / 2));
+
+            System.out.println("Cache size after fetching tiles: " + MapRasterTiles.getTileCacheSize());
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -293,6 +297,8 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     public void dispose() {
         shapeRenderer.dispose();
         hudStage.dispose();
+
+      //  MapRasterTiles.saveTileCache();
     }
 
     @Override
