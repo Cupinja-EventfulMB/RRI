@@ -5,6 +5,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
@@ -27,10 +28,12 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.actions.Actions;
 import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
@@ -79,18 +82,9 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     private FitViewport viewport;
     private Boolean ranOnce = false;
     private boolean eventAnimationVisible = false;
-
+    private Table currentInfoTable = null;
     List<Location> locations = new ArrayList<>();
-
-    // boat animation
-    Geolocation[] boatCoordinates = {
-            new Geolocation(46.5602f, 15.625186f),
-            new Geolocation(46.5580f, 15.632482f),
-            new Geolocation(46.5560f, 15.639112f),
-            new Geolocation(46.5555f, 15.647974f),
-            new Geolocation(46.5553f, 15.657566f)
-    };
-    BoatAnimation boatAnimation;
+    private boolean infoTavleVisible = false;
 
     // center geolocation
     private final Geolocation CENTER_GEOLOCATION = new Geolocation(46.557314, 15.637771);
@@ -101,7 +95,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     private Array<Texture> markerInstitutionTextures;
     private Dialog markerInfoDialog;
 
-    private void loadTexturesAndSkin(){
+    private void loadTexturesAndSkin() {
         markerInstitutionTextures = new Array<>();
         markerInstitutionTextures.add(new Texture(Gdx.files.internal("assets/institution.png")));
 
@@ -210,16 +204,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
         Gdx.input.setInputProcessor(new InputMultiplexer(hudStage, new GestureDetector(this)));
 
-        // boat
-        boatAnimation = new BoatAnimation(boatCoordinates, beginTile, 5);
         stage = new Stage(viewport, spriteBatch);
-        stage.addActor(boatAnimation.create());
-
-        // dialog instituton
-        markerInfoDialog = new Dialog("Institution Information", skin);
-        markerInfoDialog.text("Institution: ");
-        markerInfoDialog.button("Exit", "exit");
-
     }
 
     @Override
@@ -274,24 +259,91 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     }
 
     private void showMarkerInfo(Location location) {
-        markerInfoDialog.getContentTable().clear();
-        markerInfoDialog.text(location.getInstitution() + ",");
-        markerInfoDialog.text(location.getStreet() + " ");
-        markerInfoDialog.text(location.getCity());
+        final float fadeInDuration = 0.5f;
+        final float fadeOutDuration = 0.5f;
 
-        markerInfoDialog.addListener(new ClickListener() {
+        // Close the currently open info table, if any
+        if (currentInfoTable != null) {
+            currentInfoTable.addAction(Actions.sequence(
+                    Actions.fadeOut(fadeOutDuration),
+                    Actions.hide(),
+                    Actions.removeActor()
+            ));
+            currentInfoTable = null; // having only one info table open
+        }
+
+
+        Pixmap bgPixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        bgPixmap.setColor(0.5f, 0.5f, 0.5f, 0.8f);
+        bgPixmap.fill();
+
+        TextureRegionDrawable textureRegionDrawable = new TextureRegionDrawable(new Texture(bgPixmap));
+
+        final Table infoTable = new Table(skin);
+        infoTable.setFillParent(true);
+        infoTable.center();
+        infoTable.setBackground(textureRegionDrawable);
+
+        Label.LabelStyle labelTitleStyle = new Label.LabelStyle(skin.get("title-plain", Label.LabelStyle.class));
+        Label.LabelStyle labelSubtitleStyle = new Label.LabelStyle(skin.get("subtitle", Label.LabelStyle.class));
+
+        infoTable.add(new Label("Institution: " + location.getInstitution(), labelTitleStyle)).padBottom(10).row();
+        infoTable.add(new Label("Location: " + location.getStreet() + ", " + location.getCity(), labelSubtitleStyle)).padBottom(10).row();
+
+        infoTable.add(setImage(location)).padBottom(10).row();
+
+        TextButton exitButton = new TextButton("Exit", skin, "round");
+        exitButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                if (event.getTarget().getName() != null && event.getTarget().getName().equals("exit")) {
-                    markerInfoDialog.hide();
-                }
+                infoTable.addAction(Actions.sequence(
+                        //Actions.fadeOut(fadeOutDuration), todo vprasaj
+                        Actions.hide(),
+                        Actions.removeActor()
+                ));
+                infoTable.remove();
+                currentInfoTable = null;
+                infoTavleVisible = false;
             }
         });
+        infoTable.add(exitButton).padTop(20);
 
-        markerInfoDialog.show(hudStage);
+        infoTable.addAction(Actions.sequence(
+                Actions.fadeIn(fadeOutDuration),
+                Actions.visible(true),
+                Actions.run(new Runnable() {
+                    @Override
+                    public void run() {
+                        infoTavleVisible = true;
+                    }
+                })
+        ));
+
+        currentInfoTable = infoTable;
+        hudStage.addActor(infoTable);
     }
 
-
+    private Image setImage(Location location) {
+        Image institutionImage = new Image();
+        if (Objects.equals(location.getInstitution(), "Stuk")) {
+            institutionImage = new Image(new Texture(Gdx.files.internal("assets/stuk.png")));
+        } else if (Objects.equals(location.getInstitution(), "Lutkovno gledalisce")) {
+            institutionImage = new Image(new Texture(Gdx.files.internal("assets/lutkovnoGledalisceMaribor.png")));
+        } else if (Objects.equals(location.getInstitution(), "SNG")) {
+            institutionImage = new Image(new Texture(Gdx.files.internal("assets/sng.png")));
+        } else if (Objects.equals(location.getInstitution(), "ODER MINORITI")) {
+            institutionImage = new Image(new Texture(Gdx.files.internal("assets/minoriti.png")));
+        } else if (Objects.equals(location.getInstitution(), "Narodni dom Maribor")) {
+            institutionImage = new Image(new Texture(Gdx.files.internal("assets/narodniDomMaribor.png")));
+        } else if (Objects.equals(location.getInstitution(), "Narodni dom Maribor")) {
+            institutionImage = new Image(new Texture(Gdx.files.internal("assets/narodniDomMaribor.png")));
+        } else if (Objects.equals(location.getInstitution(), "Dvorana Tabor")) {
+            institutionImage = new Image(new Texture(Gdx.files.internal("assets/dvoranaTabor.png")));
+        } else if (Objects.equals(location.getInstitution(), "Festivalna dvorana Lent Maribor")) {
+            institutionImage = new Image(new Texture(Gdx.files.internal("assets/lent.png")));
+        }
+        return institutionImage;
+    }
 
     @Override
     public void dispose() {
@@ -382,18 +434,18 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         camera.position.y = MathUtils.clamp(camera.position.y, effectiveViewportHeight / 2f, Constants.MAP_HEIGHT - effectiveViewportHeight / 2f);
     }
 
-    public Actor createDiscoBall(Geolocation location) {
+    public void createDiscoBall(Geolocation location) {
         Image discoBall = new Image(new Texture("assets/discoBall.png"));
-        discoBall.setWidth(70f);
-        discoBall.setHeight(70f);
+        discoBall.setWidth(75f);
+        discoBall.setHeight(75f);
 
         Vector2 position = MapRasterTiles.getPixelPosition(location.lat, location.lng, beginTile.x, beginTile.y);
-        float shiftAmount = 40f; // Adjust this value as needed
+        float shiftAmount = 40f;
         discoBall.setPosition(position.x - shiftAmount, position.y);
 
         // Add a bouncing animation
-        float bounceHeight = 10f; // Adjust this value to control the bounce height
-        float duration = 1.0f; // Adjust this value to control the duration of the bounce
+        float bounceHeight = 10f;
+        float duration = 1.0f;
 
         discoBall.addAction(Actions.sequence(
                 Actions.moveBy(0, bounceHeight, duration / 2, Interpolation.linear),
@@ -408,9 +460,9 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
         stage.addActor(discoBall);
 
-        return discoBall;
     }
-    public Actor createMasks(Geolocation location) {
+
+    public void createMasks(Geolocation location) {
         Image masks = new Image(new Texture("assets/masks.png"));
         masks.setWidth(70f);
         masks.setHeight(70f);
@@ -433,10 +485,9 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
         stage.addActor(masks);
 
-        return masks;
     }
 
-    public Actor createMicrophones(Geolocation location) {
+    public void createMicrophones(Geolocation location) {
         Image microphones = new Image(new Texture("assets/microphone.png"));
         microphones.setWidth(50f);
         microphones.setHeight(50f);
@@ -459,16 +510,15 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
         stage.addActor(microphones);
 
-        return microphones;
     }
 
     private void createEventAnimation() {
         for (Location location : locations) {
-            if(Objects.equals(location.getInstitution(), "Stuk")){
+            if (Objects.equals(location.getInstitution(), "Stuk")) {
                 createDiscoBall(location.getGeolocation());
-            } else if (Objects.equals(location.getInstitution(), "SNG") || Objects.equals(location.getInstitution(), "Lutkovno gledalisce") || Objects.equals(location.getInstitution(), "Narodni dom Maribor") || Objects.equals(location.getInstitution(), "ODER MINORITI")){ /// add the otherqqqq
+            } else if (Objects.equals(location.getInstitution(), "SNG") || Objects.equals(location.getInstitution(), "Lutkovno gledalisce") || Objects.equals(location.getInstitution(), "Narodni dom Maribor") || Objects.equals(location.getInstitution(), "ODER MINORITI")) { /// add the otherqqqq
                 createMasks(location.getGeolocation());
-            } else if (Objects.equals(location.getInstitution(), "Festivalna dvorana Lent Maribor")|| Objects.equals(location.getInstitution(), "Dvorana Tabor")) {
+            } else if (Objects.equals(location.getInstitution(), "Festivalna dvorana Lent Maribor") || Objects.equals(location.getInstitution(), "Dvorana Tabor")) {
                 createMicrophones(location.getGeolocation());
             }
         }
@@ -513,8 +563,10 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         langButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                showLangExample = !showLangExample;
-                ranOnce = false;
+                if(!infoTavleVisible){
+                    showLangExample = !showLangExample;
+                    ranOnce = false;
+                }
             }
         });
 
@@ -522,21 +574,14 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         eventButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                if (eventAnimationVisible) {
-                    clearEventAnimation();
-                } else {
-                    createEventAnimation();
-
+                if(!infoTavleVisible){
+                    if (eventAnimationVisible) {
+                        clearEventAnimation();
+                    } else {
+                        createEventAnimation();
+                    }
+                    eventAnimationVisible = !eventAnimationVisible;
                 }
-                eventAnimationVisible = !eventAnimationVisible;
-            }
-        });
-
-        TextButton animButton = new TextButton("Animation", skin, "round");
-        animButton.addListener(new ClickListener() {
-            @Override
-            public void clicked(InputEvent event, float x, float y) {
-                stage.addActor(boatAnimation.create());
             }
         });
 
@@ -544,7 +589,9 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         quitButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                Gdx.app.exit();
+                if(!infoTavleVisible){
+                    Gdx.app.exit();
+                }
             }
         });
 
@@ -553,7 +600,6 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
         buttonTable.add(langButton).padBottom(15).expandX().fill().row();
         buttonTable.add(eventButton).padBottom(15).expandX().fill().row();
-        buttonTable.add(animButton).padBottom(15).fillX().row();
         buttonTable.add(quitButton).fillX();
 
 

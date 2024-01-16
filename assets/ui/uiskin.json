@@ -132,8 +132,7 @@ com.badlogic.gdx.scenes.scene2d.ui.Label$LabelStyle: {
 	},
 	subtitle: {
 		font: font-label,
-		fontColor: { a: 1 },
-		background: label
+		fontColor: { r: 1, g: 1, b: 1, a: 1 }
 	},
 	title: {
 		font: font-title,
