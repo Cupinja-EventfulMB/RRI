@@ -7,6 +7,7 @@ import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
@@ -44,6 +45,7 @@ import com.mygdx.game.lang.Context;
 import com.mygdx.game.lang.LangKt;
 import com.mygdx.game.utils.Config;
 import com.mygdx.game.utils.Constants;
+import com.mygdx.game.utils.DancingCharacter;
 import com.mygdx.game.utils.Geolocation;
 import com.mygdx.game.utils.Location;
 import com.mygdx.game.utils.MapRasterTiles;
@@ -94,6 +96,14 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     // marker and dialog institution
     private Array<Texture> markerInstitutionTextures;
     private Dialog markerInfoDialog;
+
+    // animations
+    private Animation<TextureRegion> dancingManAnimation;
+    private Image dancingManImage;
+    private TextureRegion[] dancingManFrames;
+    private float stateTime; // elapsed time for the animation
+    private List<DancingCharacter> dancingCharacters;
+
 
     private void loadTexturesAndSkin() {
         markerInstitutionTextures = new Array<>();
@@ -205,6 +215,10 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         Gdx.input.setInputProcessor(new InputMultiplexer(hudStage, new GestureDetector(this)));
 
         stage = new Stage(viewport, spriteBatch);
+
+        //animation
+        dancingCharacters = new ArrayList<>();
+
     }
 
     @Override
@@ -231,8 +245,40 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             LangKt.run(new Context(shapeRenderer, camera, beginTile));
             ranOnce = true;
         }
+
+        for (DancingCharacter dancingCharacter : dancingCharacters) {
+            dancingCharacter.update(Gdx.graphics.getDeltaTime());
+        }
     }
 
+    private void initializeDancingCharacters(){
+        for (Location location : locations) {
+            String institutionName = location.getInstitution();
+            if ("Festivalna dvorana Lent Maribor".equals(institutionName) || "Dvorana Tabor".equals(institutionName)) {
+                DancingCharacter dancingMan = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x, beginTile.y - 0.02f, "man", 2);
+                DancingCharacter dancingWoman = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x + 0.1f, beginTile.y, "woman", 5);
+                dancingCharacters.add(dancingMan);
+                dancingCharacters.add(dancingWoman);
+                stage.addActor(dancingMan.getImage());
+                stage.addActor(dancingWoman.getImage());
+            }
+            if ("Stuk".equals(institutionName)) {
+                DancingCharacter dancingMan = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x, beginTile.y - 0.02f, "man2", 2);
+                DancingCharacter dancingWoman = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x + 0.1f, beginTile.y, "woman2", 3);
+                dancingCharacters.add(dancingMan);
+                dancingCharacters.add(dancingWoman);
+                stage.addActor(dancingMan.getImage());
+                stage.addActor(dancingWoman.getImage());
+            }
+        }
+    }
+
+    private void clearDancingCharacters() {
+        for (DancingCharacter dancingCharacter : dancingCharacters) {
+            dancingCharacter.getImage().remove();
+        }
+        dancingCharacters.clear();
+    }
 
     private void drawMarkers(SpriteBatch spriteBatch) {
         shapeRenderer.setProjectionMatrix(camera.combined);
@@ -585,6 +631,19 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             }
         });
 
+        TextButton danceButton = new TextButton("Dance", skin, "round");
+        danceButton.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                if (eventAnimationVisible) {
+                    clearDancingCharacters();
+                } else {
+                    initializeDancingCharacters();
+                }
+                eventAnimationVisible = !eventAnimationVisible;
+            }
+        });
+
         TextButton quitButton = new TextButton("Quit", skin, "round");
         quitButton.addListener(new ClickListener() {
             @Override
@@ -600,6 +659,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
         buttonTable.add(langButton).padBottom(15).expandX().fill().row();
         buttonTable.add(eventButton).padBottom(15).expandX().fill().row();
+        buttonTable.add(danceButton).padBottom(15).expandX().fill().row();
         buttonTable.add(quitButton).fillX();
 
 
