@@ -96,13 +96,14 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     // marker and dialog institution
     private Array<Texture> markerInstitutionTextures;
     private Dialog markerInfoDialog;
-
     // animations
-    private Animation<TextureRegion> dancingManAnimation;
-    private Image dancingManImage;
-    private TextureRegion[] dancingManFrames;
-    private float stateTime; // elapsed time for the animation
     private List<DancingCharacter> dancingCharacters;
+    private boolean isZooming = false;
+    private float targetZoom;
+    private float zoomTimer = 0; // elapsed time during the zoom effect
+    private float targetX = 0;
+    private float targetY = 0;
+    private boolean isZoomedIn = false;
 
 
     private void loadTexturesAndSkin() {
@@ -254,7 +255,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     private void initializeDancingCharacters(){
         for (Location location : locations) {
             String institutionName = location.getInstitution();
-            if ("Festivalna dvorana Lent Maribor".equals(institutionName) || "Dvorana Tabor".equals(institutionName)) {
+            if ("Festivalna dvorana Lent Maribor".equals(institutionName)) {
                 DancingCharacter dancingMan = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x, beginTile.y - 0.02f, "man", 2);
                 DancingCharacter dancingWoman = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x + 0.1f, beginTile.y, "woman", 5);
                 dancingCharacters.add(dancingMan);
@@ -262,13 +263,26 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
                 stage.addActor(dancingMan.getImage());
                 stage.addActor(dancingWoman.getImage());
             }
-            if ("Stuk".equals(institutionName)) {
-                DancingCharacter dancingMan = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x, beginTile.y - 0.02f, "man2", 2);
+            if ("Dvorana Tabor".equals(institutionName)) {
+                DancingCharacter dancingMan = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x - 0.2f, beginTile.y - 0.02f, "man2", 2);
                 DancingCharacter dancingWoman = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x + 0.1f, beginTile.y, "woman2", 3);
                 dancingCharacters.add(dancingMan);
                 dancingCharacters.add(dancingWoman);
                 stage.addActor(dancingMan.getImage());
                 stage.addActor(dancingWoman.getImage());
+            }
+            if ("SNG".equals(institutionName)) {
+                DancingCharacter dancingMan = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x, beginTile.y - 0.02f, "man3", 2);
+                DancingCharacter dancingWoman = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x - 0.1f, beginTile.y - 0.02f, "woman3", 2);
+                dancingCharacters.add(dancingMan);
+                dancingCharacters.add(dancingWoman);
+                stage.addActor(dancingMan.getImage());
+                stage.addActor(dancingWoman.getImage());
+            }
+            if ("Stuk".equals(institutionName)) {
+                DancingCharacter dancingPair = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x - 0.2f, beginTile.y - 0.02f, "pair", 3);
+                dancingCharacters.add(dancingPair);
+                stage.addActor(dancingPair.getImage());
             }
         }
     }
@@ -295,17 +309,74 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             if (Gdx.input.justTouched()) {
                 Vector3 touchPos = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
                 camera.unproject(touchPos);
-                if (marker.x <= touchPos.x && touchPos.x <= marker.x + 100 &&
-                        marker.y <= touchPos.y && touchPos.y <= marker.y + 100) {
-                    showMarkerInfo(location);
+
+                float markerWidth = 100;
+                float markerHeight = 100;
+
+                if (touchPos.x >= marker.x && touchPos.x <= marker.x + markerWidth &&
+                        touchPos.y >= marker.y && touchPos.y <= marker.y + markerHeight) {
+                    if(eventAnimationVisible){
+                        if (isZoomedIn) {
+                            zoomOut();
+                        } else {
+                            zoomIn(marker.x, marker.y, markerWidth, markerHeight);
+                            performZoomEffect();
+                        }
+                    } else {
+                        showMarkerInfo(location);
+                    }
                 }
             }
         }
+
         spriteBatch.end();
+
+        performZoomEffect();
     }
 
+    private void zoomIn(float markerX, float markerY, float markerWidth, float markerHeight) {
+        isZooming = true;
+        zoomTimer = 0;
+
+        targetX = markerX + markerWidth / 2f;
+        targetY = markerY + markerHeight / 2f;
+        targetZoom = 0.5f;
+
+        isZoomedIn = true;
+    }
+
+    private void zoomOut() {
+        isZooming = true;
+        zoomTimer = 0;
+
+        targetX = Constants.MAP_WIDTH / 2f;
+        targetY = Constants.MAP_HEIGHT / 2f;
+        targetZoom = 2.0f;
+
+        isZoomedIn = false;
+    }
+
+    private void performZoomEffect() {
+        if (isZooming) {
+            zoomTimer += Gdx.graphics.getDeltaTime();
+
+            // ease-out function for smoother animation
+            float zoomDuration = 0.3f;
+            float alpha = MathUtils.clamp(zoomTimer / zoomDuration, 0, 1);
+            float easedAlpha = Interpolation.circleOut.apply(alpha);
+
+            camera.position.x = MathUtils.lerp(camera.position.x, targetX, easedAlpha);
+            camera.position.y = MathUtils.lerp(camera.position.y, targetY, easedAlpha);
+            camera.zoom = MathUtils.lerp(camera.zoom, targetZoom, easedAlpha);
+
+            if (zoomTimer >= zoomDuration) {
+                isZooming = false;
+            }
+        }
+    }
+
+
     private void showMarkerInfo(Location location) {
-        final float fadeInDuration = 0.5f;
         final float fadeOutDuration = 0.5f;
 
         // Close the currently open info table, if any
@@ -379,9 +450,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             institutionImage = new Image(new Texture(Gdx.files.internal("assets/sng.png")));
         } else if (Objects.equals(location.getInstitution(), "ODER MINORITI")) {
             institutionImage = new Image(new Texture(Gdx.files.internal("assets/minoriti.png")));
-        } else if (Objects.equals(location.getInstitution(), "Narodni dom Maribor")) {
-            institutionImage = new Image(new Texture(Gdx.files.internal("assets/narodniDomMaribor.png")));
-        } else if (Objects.equals(location.getInstitution(), "Narodni dom Maribor")) {
+        }  else if (Objects.equals(location.getInstitution(), "Narodni dom Maribor")) {
             institutionImage = new Image(new Texture(Gdx.files.internal("assets/narodniDomMaribor.png")));
         } else if (Objects.equals(location.getInstitution(), "Dvorana Tabor")) {
             institutionImage = new Image(new Texture(Gdx.files.internal("assets/dvoranaTabor.png")));
