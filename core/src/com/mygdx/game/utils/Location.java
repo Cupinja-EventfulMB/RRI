@@ -5,12 +5,16 @@ public class Location {
     private String city;
     private String street;
     private Geolocation geolocation;
+    private String description;
+    private String email;
 
-    public Location(String institution, String city, String street, Geolocation geolocation) {
+    public Location(String institution, String city, String street, Geolocation geolocation, String description, String email) {
         this.institution = institution;
         this.city = city;
         this.street = street;
         this.geolocation = geolocation;
+        this.description = description;
+        this.email = email;
     }
 
     public String getInstitution() {
@@ -43,6 +47,22 @@ public class Location {
 
     public void setGeolocation(Geolocation geolocation) {
         this.geolocation = geolocation;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 }
 

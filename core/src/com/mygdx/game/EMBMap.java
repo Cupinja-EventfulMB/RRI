@@ -38,6 +38,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
+import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
@@ -145,13 +146,15 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
                 String institution = document.getString("institution");
                 String city = document.getString("city");
                 String street = document.getString("street");
+                String description = document.getString("description");
+                String email = document.getString("email");
 
                 Double lat = document.getDouble("x");
                 Double lng = document.getDouble("y");
 
                 if (lat != null && lng != null) {
                     Geolocation geolocation = new Geolocation(lat, lng);
-                    Location location = new Location(institution, city, street, geolocation);
+                    Location location = new Location(institution, city, street, geolocation,description, email);
                     locations.add(location);
                 } else {
                     System.out.println("Skipping document with missing or null lat/lng values.");
@@ -409,7 +412,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
 
         Pixmap bgPixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
-        bgPixmap.setColor(0.5f, 0.5f, 0.5f, 0.8f);
+        bgPixmap.setColor(0.5f, 0.5f, 0.5f, 0.9f);
         bgPixmap.fill();
 
         TextureRegionDrawable textureRegionDrawable = new TextureRegionDrawable(new Texture(bgPixmap));
@@ -421,18 +424,28 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
         Label.LabelStyle labelTitleStyle = new Label.LabelStyle(skin.get("title-plain", Label.LabelStyle.class));
         Label.LabelStyle labelSubtitleStyle = new Label.LabelStyle(skin.get("subtitle", Label.LabelStyle.class));
+        Label.LabelStyle labelDescriptionEmailStyle = new Label.LabelStyle(skin.get("subtitle", Label.LabelStyle.class));
+
+        Label descriptionLabel = new Label( location.getDescription(), labelDescriptionEmailStyle);
+        descriptionLabel.setAlignment(Align.center);
+        descriptionLabel.setFontScale(1.1f);
+
+        Label locationLabel = new Label("Location: " + location.getStreet() + ", " + location.getCity(), labelSubtitleStyle);
+        locationLabel.setAlignment(Align.center);
+        locationLabel.setFontScale(1.1f);
 
         infoTable.add(new Label("Institution: " + location.getInstitution(), labelTitleStyle)).padBottom(10).row();
-        infoTable.add(new Label("Location: " + location.getStreet() + ", " + location.getCity(), labelSubtitleStyle)).padBottom(10).row();
-
+        infoTable.add(locationLabel).padBottom(10).row();
+        infoTable.add(descriptionLabel).padBottom(10).row();
         infoTable.add(setImage(location)).padBottom(10).row();
+        infoTable.add(new Label("Email: " + location.getEmail(), labelDescriptionEmailStyle)).padBottom(10).row();
+
 
         TextButton exitButton = new TextButton("Exit", skin, "round");
         exitButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
                 infoTable.addAction(Actions.sequence(
-                        //Actions.fadeOut(fadeOutDuration), todo vprasaj
                         Actions.hide(),
                         Actions.removeActor()
                 ));
@@ -466,13 +479,13 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.LUTKOVNO_GLEDALISCE)));
         } else if (Objects.equals(location.getInstitution(), "SNG")) {
             institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.SNG)));
-        } else if (Objects.equals(location.getInstitution(), "ODER MINORITI")) {
+        } else if (Objects.equals(location.getInstitution(), "Oder Minoriti")) {
             institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.MINORITI)));
         }  else if (Objects.equals(location.getInstitution(), "Narodni dom Maribor")) {
             institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.NARODNI_DOM)));
         } else if (Objects.equals(location.getInstitution(), "Dvorana Tabor")) {
             institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.DVORANA_TABOR)));
-        } else if (Objects.equals(location.getInstitution(), "Festivalna dvorana Lent Maribor")) {
+        } else if (Objects.equals(location.getInstitution(), "Dvorana Lent")) {
             institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.LENT)));
         }
         return institutionImage;
