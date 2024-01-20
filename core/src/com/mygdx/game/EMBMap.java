@@ -56,7 +56,7 @@ import com.mygdx.game.utils.Location;
 import com.mygdx.game.utils.MapRasterTiles;
 import com.mygdx.game.utils.MongoDBManager;
 import com.mygdx.game.utils.ZoomXY;
-
+import com.badlogic.gdx.graphics.g2d.ParticleEffect;
 import org.bson.Document;
 
 import java.io.IOException;
@@ -113,6 +113,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     private TextureAtlas gameplayAtlas;
     private Music danceMusic;
     private Music operaMusic;
+    private boolean isDanceMusicPlaying = false; // Initial state
     private boolean isSwitchButtonVisible = false;
 
     private TextButton musicButton;
@@ -280,9 +281,19 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             ranOnce = true;
         }
 
+        float deltaTime = Gdx.graphics.getDeltaTime();
+        spriteBatch.begin();
         for (DancingCharacter dancingCharacter : dancingCharacters) {
-            dancingCharacter.update(Gdx.graphics.getDeltaTime());
+            ParticleEffect particleEffect = dancingCharacter.getParticleEffect();
+            if (particleEffect != null) {
+                particleEffect.setPosition(dancingCharacter.getX(), dancingCharacter.getY());
+                particleEffect.update(deltaTime);
+                particleEffect.draw(spriteBatch);
+            }
+            dancingCharacter.update(deltaTime);
+            dancingCharacter.getImage().draw(spriteBatch, 1);
         }
+        spriteBatch.end();
     }
 
     private void initializeDancingCharacters(){
@@ -332,7 +343,13 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
                 dancingCharacters.add(dancingMan);
                 stage.addActor(dancingMan.getImage());
             }
-
+        }
+        for (DancingCharacter character : dancingCharacters) {
+            ParticleEffect characterParticleEffect = new ParticleEffect();
+            characterParticleEffect.load(Gdx.files.internal("assets/particles/note"), Gdx.files.internal("assets/particles"));
+            characterParticleEffect.setPosition(character.getX(), character.getY());
+            character.setParticleEffect(characterParticleEffect);
+            characterParticleEffect.start();
         }
     }
 
@@ -355,15 +372,15 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             spriteBatch.draw(markerInstitutionTextures.first(), marker.x, marker.y, 100, 100);
 
             String institutionName = location.getInstitution();
-            Label label = new Label(institutionName, skin, "title");
+            Label label = new Label(" " + institutionName + " ", skin, "title");
             //  label.setHeight(30f);
             float labelWidth = label.getWidth();
             float labelX = marker.x + (50 - labelWidth / 2);
             float labelY;
             if ("Oder Minoriti".equals(institutionName) || "SNG".equals(institutionName)) {
-                labelY = marker.y + 100;
+                labelY = marker.y + 104;
             } else{
-                labelY = marker.y - 60;
+                labelY = marker.y - 40;
             }
 
             label.setPosition(labelX, labelY);
@@ -479,7 +496,6 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             @Override
             public void clicked(InputEvent event, float x, float y) {
                 infoTable.addAction(Actions.sequence(
-                        //Actions.fadeOut(fadeOutDuration), todo vprasaj
                         Actions.hide(),
                         Actions.removeActor()
                 ));
@@ -532,6 +548,13 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         danceMusic.dispose();
         operaMusic.dispose();
         gameplayAtlas.dispose();
+
+        for (DancingCharacter dancingCharacter : dancingCharacters) {
+            ParticleEffect particleEffect = dancingCharacter.getParticleEffect();
+            if (particleEffect != null) {
+                particleEffect.dispose();
+            }
+        }
 
         //  MapRasterTiles.saveTileCache();
     }
