@@ -65,17 +65,17 @@
   		"type": "Feature",
   		"properties": {
 			"element": "Square",
-			"name": "Leona Stuklja"
+			"name": "Trg Revolucije"
 		},
   		"geometry": {
 			"type": "Polygon",
 			"coordinates": [
       		[
-        		[15.6479087, 46.5591022],
-        		[15.65014124, 46.55896417],
-        		[15.6500288, 46.5581469],
-        		[15.64786056, 46.55853899],
-        		[15.6479087, 46.5591022]
+        		[15.6441672, 46.553326],
+        		[15.645472997, 46.553806014],
+        		[15.645991734, 46.553719909],
+        		[15.6463673727, 46.552760438],
+        		[15.6441672, 46.553326]
       		]
     	  ]
   		}
@@ -90,6 +90,30 @@
   		"geometry": {
 			"type": "Point",
 			"coordinates": [15.6486237, 46.5605314]
+  		}
+	  },
+
+	{
+  		"type": "Feature",
+  		"properties": {
+			"element": "Statue",
+			"name": "Po cesti"
+		},
+  		"geometry": {
+			"type": "Point",
+			"coordinates": [15.6333024597, 46.561962204]
+  		}
+	  },
+
+	{
+  		"type": "Feature",
+  		"properties": {
+			"element": "Statue",
+			"name": "Kamiski Angeli"
+		},
+  		"geometry": {
+			"type": "Point",
+			"coordinates": [15.6297078732, 46.567857291]
   		}
 	  },
 

@@ -11,6 +11,7 @@ import java.io.File
 import java.io.InputStream
 import kotlin.math.PI
 import kotlin.math.cos
+import com.badlogic.gdx.math.Vector2
 import kotlin.math.sin
 
 const val ERROR_STATE = 0
@@ -651,7 +652,7 @@ class Parser(private val scanner: Scanner, private var ctx: Context) {
     fun parse(): Boolean {
         ctx.shapeRenderer.setProjectionMatrix(ctx.camera.combined);
         ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Filled)
-        ctx.shapeRenderer.color = Color.BLUE
+        ctx.shapeRenderer.color = Color.RED
         last = scanner.getToken()
         val status = City()
 
@@ -986,9 +987,35 @@ class Parser(private val scanner: Scanner, private var ctx: Context) {
                                 val markerFirstLine = MapRasterTiles.getPixelPosition(firstLine!!.longtitude, firstLine!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
                                 val markerSecondLine = MapRasterTiles.getPixelPosition(secondLine!!.longtitude, secondLine!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
 
-                                ctx.shapeRenderer.line(markerFirstBendLine.x, markerFirstBendLine.y, markerFirstLine.x, markerFirstLine.y)
-                                ctx.shapeRenderer.line(markerFirstLine.x, markerFirstLine.y, markerSecondLine.x, markerSecondLine.y)
+                                val thickness = 4f
 
+                                val dx1 = markerFirstLine.x - markerFirstBendLine.x
+                                val dy1 = markerFirstLine.y - markerFirstBendLine.y
+                                val len1 = Math.sqrt((dx1 * dx1 + dy1 * dy1).toDouble()).toFloat()
+                                val normX1 = dy1 / len1
+                                val normY1 = -dx1 / len1
+
+                                val corner1 = Vector2(markerFirstBendLine.x + thickness * normX1, markerFirstBendLine.y + thickness * normY1)
+                                val corner2 = Vector2(markerFirstBendLine.x - thickness * normX1, markerFirstBendLine.y - thickness * normY1)
+                                val corner3 = Vector2(markerFirstLine.x + thickness * normX1, markerFirstLine.y + thickness * normY1)
+                                val corner4 = Vector2(markerFirstLine.x - thickness * normX1, markerFirstLine.y - thickness * normY1)
+
+                                ctx.shapeRenderer.triangle(corner1.x, corner1.y, corner2.x, corner2.y, corner3.x, corner3.y)
+                                ctx.shapeRenderer.triangle(corner3.x, corner3.y, corner2.x, corner2.y, corner4.x, corner4.y)
+
+                                val dx2 = markerSecondLine.x - markerFirstLine.x
+                                val dy2 = markerSecondLine.y - markerFirstLine.y
+                                val len2 = Math.sqrt((dx2 * dx2 + dy2 * dy2).toDouble()).toFloat()
+                                val normX2 = dy2 / len2
+                                val normY2 = -dx2 / len2
+
+                                val corner5 = Vector2(markerFirstLine.x + thickness * normX2, markerFirstLine.y + thickness * normY2)
+                                val corner6 = Vector2(markerFirstLine.x - thickness * normX2, markerFirstLine.y - thickness * normY2)
+                                val corner7 = Vector2(markerSecondLine.x + thickness * normX2, markerSecondLine.y + thickness * normY2)
+                                val corner8 = Vector2(markerSecondLine.x - thickness * normX2, markerSecondLine.y - thickness * normY2)
+
+                                ctx.shapeRenderer.triangle(corner5.x, corner5.y, corner6.x, corner6.y, corner7.x, corner7.y)
+                                ctx.shapeRenderer.triangle(corner7.x, corner7.y, corner6.x, corner6.y, corner8.x, corner8.y)
 
                                 geoJSON += "\n\t{\n" +
                                         "  \t\t\"type\": \"Feature\",\n" +
@@ -1161,11 +1188,18 @@ class Parser(private val scanner: Scanner, private var ctx: Context) {
                                 markerFourthLine.x, markerFourthLine.y,
                                 markerFirstLine.x, markerFirstLine.y
                             )
-                            ctx.shapeRenderer.end()
-                            ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Line)
-                            ctx.shapeRenderer.polyline(vertices, 0, vertices.size)
-                            ctx.shapeRenderer.end()
-                            ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Filled)
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerSecondLine.x, markerSecondLine.y,
+                                markerThirdLine.x, markerThirdLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerThirdLine.x, markerThirdLine.y,
+                                markerFourthLine.x, markerFourthLine.y
+                            )
+
                             geoJSON += "\n\t{\n" +
                                     "  \t\t\"type\": \"Feature\",\n" +
                                     "  \t\t\"properties\": {\n" +
@@ -1292,11 +1326,54 @@ class Parser(private val scanner: Scanner, private var ctx: Context) {
                                 markerTenthLine.x, markerTenthLine.y,
                                 markerFirstLine.x, markerFirstLine.y
                             )
-                            ctx.shapeRenderer.end()
-                            ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Line)
-                            ctx.shapeRenderer.polygon(vertices, 0, vertices.size)
-                            ctx.shapeRenderer.end()
-                            ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Filled)
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerSecondLine.x, markerSecondLine.y,
+                                markerThirdLine.x, markerThirdLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerThirdLine.x, markerThirdLine.y,
+                                markerFourthLine.x, markerFourthLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerFourthLine.x, markerFourthLine.y,
+                                markerFifthLine.x, markerFifthLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerFifthLine.x, markerFifthLine.y,
+                                markerSixthLine.x, markerSixthLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerSixthLine.x, markerSixthLine.y,
+                                markerSeventhLine.x, markerSeventhLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerSeventhLine.x, markerSeventhLine.y,
+                                markerEighthLine.x, markerEighthLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerEighthLine.x, markerEighthLine.y,
+                                markerNinethLine.x, markerNinethLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerNinethLine.x, markerNinethLine.y,
+                                markerTenthLine.x, markerTenthLine.y
+                            )
+
                             geoJSON += "\n\t{\n" +
                                     "  \t\t\"type\": \"Feature\",\n" +
                                     "  \t\t\"properties\": {\n" +

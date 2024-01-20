@@ -6,7 +6,7 @@ public class AssetPaths {
     public static final String UI_SKIN = "ui/uiskin.json";
     public static final String GAMEPLAY = "gameplay/gameplay.atlas";
     public static final String DANCE_MUSIC = "music/dance_music.mp3";
-
+    public static final String MELODY_MUSIC = "music/melody.wav";
 
     private AssetPaths() {
     }

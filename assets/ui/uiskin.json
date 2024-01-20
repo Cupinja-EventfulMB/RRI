@@ -36,8 +36,10 @@ com.badlogic.gdx.scenes.scene2d.ui.TextButton$TextButtonStyle: {
 		font: font-title,
 		fontColor: { a: 1, b: 1, g: 1, r: 1 },
 		downFontColor: { a: 1, b: 0.52, g: 0.4, r: 0 },
+		checkedFontColor: { r: 1, g: 0.7, b: 0.7, a: 1 },
 		up: round-button,
-		down: round-button-down
+		down: round-button-down,
+		checked: round-button-down
 	},
 	toggle: {
 		font: font-button,
@@ -137,7 +139,7 @@ com.badlogic.gdx.scenes.scene2d.ui.Label$LabelStyle: {
 	title: {
 		font: font-title,
 		fontColor: { a: 1, b: 1, g: 1, r: 1 },
-		background: panel2
+		background: vertical-scrollbar
 	}
 },
 com.badlogic.gdx.scenes.scene2d.ui.List$ListStyle: {
