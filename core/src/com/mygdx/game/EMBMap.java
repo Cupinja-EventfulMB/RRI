@@ -9,7 +9,7 @@ import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
@@ -74,7 +74,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     private OrthographicCamera camera;
 
     private Texture[] mapTiles;
-    private ZoomXY beginTile;   // top left tile
+    private ZoomXY beginTile;
 
     private SpriteBatch spriteBatch;
 
@@ -112,12 +112,18 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     public static final AssetManager assetManager = new AssetManager();
     private TextureAtlas gameplayAtlas;
     private Music danceMusic;
+    private Music operaMusic;
+    private boolean isSwitchButtonVisible = false;
+
+    private TextButton musicButton;
+    private Music currentMusic;
+    private BitmapFont font;
 
 
 
     private void loadTexturesAndSkin() {
         markerInstitutionTextures = new Array<>();
-       // markerInstitutionTextures.add(new TextureRegion.findRegion(RegionNames.INSTITUTION));
+        // markerInstitutionTextures.add(new TextureRegion.findRegion(RegionNames.INSTITUTION));
 
         skin = new Skin(Gdx.files.internal("ui/uiskin.json"));
 
@@ -173,12 +179,17 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
         assetManager.load(AssetDescriptors.GAMEPLAY);
         assetManager.load(AssetDescriptors.DANCE_MUSIC);
+        assetManager.load(AssetDescriptors.MELODY_MUSIC);
         assetManager.finishLoading();
         gameplayAtlas = assetManager.get(AssetDescriptors.GAMEPLAY);
 
         loadTexturesAndSkin();
 
         danceMusic = assetManager.get(AssetDescriptors.DANCE_MUSIC);
+        danceMusic.setLooping(true);
+
+        operaMusic = assetManager.get(AssetDescriptors.MELODY_MUSIC);
+        operaMusic.setLooping(true);
 
         markerInstitutionTextures.add(gameplayAtlas.findRegion(RegionNames.INSTITUTION));
 
@@ -195,6 +206,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         spriteBatch = new SpriteBatch();
         hudViewport = new FitViewport(Constants.HUD_WIDTH, Constants.HUD_HEIGHT);
         viewport = new FitViewport(Constants.MAP_WIDTH / 2f, Constants.MAP_HEIGHT / 2f, camera);
+        font = new BitmapFont();
 
         touchPosition = new Vector3();
 
@@ -235,6 +247,9 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
         stage = new Stage(viewport, spriteBatch);
 
+        Table switchButtonTable = createButton();
+        hudStage.addActor(switchButtonTable);
+
         //animation
         dancingCharacters = new ArrayList<>();
 
@@ -273,7 +288,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     private void initializeDancingCharacters(){
         for (Location location : locations) {
             String institutionName = location.getInstitution();
-            if ("Festivalna dvorana Lent Maribor".equals(institutionName)) {
+            if ("Dvorana Lent".equals(institutionName)) {
                 DancingCharacter dancingMan = new DancingCharacter(gameplayAtlas, location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x, beginTile.y - 0.02f, "man", 2);
                 DancingCharacter dancingWoman = new DancingCharacter(gameplayAtlas, location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x + 0.1f, beginTile.y, "woman", 5);
                 dancingCharacters.add(dancingMan);
@@ -302,6 +317,22 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
                 dancingCharacters.add(dancingPair);
                 stage.addActor(dancingPair.getImage());
             }
+            if ("Lutkovno gledalisce".equals(institutionName)) {
+                DancingCharacter dancingMan = new DancingCharacter(gameplayAtlas, location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x, beginTile.y - 0.02f, "man3", 2);
+                dancingCharacters.add(dancingMan);
+                stage.addActor(dancingMan.getImage());
+            }
+            if ("Narodni dom Maribor".equals(institutionName)) {
+                DancingCharacter dancingWoman = new DancingCharacter(gameplayAtlas, location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x + 0.1f, beginTile.y, "woman2", 3);
+                dancingCharacters.add(dancingWoman);
+                stage.addActor(dancingWoman.getImage());
+            }
+            if ("Oder Minoriti".equals(institutionName)) {
+                DancingCharacter dancingMan = new DancingCharacter(gameplayAtlas, location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x - 0.2f, beginTile.y - 0.02f, "man2", 2);
+                dancingCharacters.add(dancingMan);
+                stage.addActor(dancingMan.getImage());
+            }
+
         }
     }
 
@@ -322,6 +353,22 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             Geolocation geolocation = location.getGeolocation();
             Vector2 marker = MapRasterTiles.getPixelPosition(geolocation.lat, geolocation.lng, beginTile.x, beginTile.y);
             spriteBatch.draw(markerInstitutionTextures.first(), marker.x, marker.y, 100, 100);
+
+            String institutionName = location.getInstitution();
+            Label label = new Label(institutionName, skin, "title");
+            //  label.setHeight(30f);
+            float labelWidth = label.getWidth();
+            float labelX = marker.x + (50 - labelWidth / 2);
+            float labelY;
+            if ("Oder Minoriti".equals(institutionName) || "SNG".equals(institutionName)) {
+                labelY = marker.y + 100;
+            } else{
+                labelY = marker.y - 60;
+            }
+
+            label.setPosition(labelX, labelY);
+            label.draw(spriteBatch, 1);
+
 
             // the marker is clicked
             if (Gdx.input.justTouched()) {
@@ -466,13 +513,13 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.LUTKOVNO_GLEDALISCE)));
         } else if (Objects.equals(location.getInstitution(), "SNG")) {
             institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.SNG)));
-        } else if (Objects.equals(location.getInstitution(), "ODER MINORITI")) {
+        } else if (Objects.equals(location.getInstitution(), "Oder Minoriti")) {
             institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.MINORITI)));
         }  else if (Objects.equals(location.getInstitution(), "Narodni dom Maribor")) {
             institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.NARODNI_DOM)));
         } else if (Objects.equals(location.getInstitution(), "Dvorana Tabor")) {
             institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.DVORANA_TABOR)));
-        } else if (Objects.equals(location.getInstitution(), "Festivalna dvorana Lent Maribor")) {
+        } else if (Objects.equals(location.getInstitution(), "Dvorana Lent")) {
             institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.LENT)));
         }
         return institutionImage;
@@ -483,9 +530,10 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         shapeRenderer.dispose();
         hudStage.dispose();
         danceMusic.dispose();
+        operaMusic.dispose();
         gameplayAtlas.dispose();
 
-      //  MapRasterTiles.saveTileCache();
+        //  MapRasterTiles.saveTileCache();
     }
 
     @Override
@@ -651,9 +699,9 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         for (Location location : locations) {
             if (Objects.equals(location.getInstitution(), "Stuk")) {
                 createDiscoBall(location.getGeolocation());
-            } else if (Objects.equals(location.getInstitution(), "SNG") || Objects.equals(location.getInstitution(), "Lutkovno gledalisce") || Objects.equals(location.getInstitution(), "Narodni dom Maribor") || Objects.equals(location.getInstitution(), "ODER MINORITI")) { /// add the otherqqqq
+            } else if (Objects.equals(location.getInstitution(), "SNG") || Objects.equals(location.getInstitution(), "Lutkovno gledalisce") || Objects.equals(location.getInstitution(), "Narodni dom Maribor") || Objects.equals(location.getInstitution(), "Oder Minoriti")) {
                 createMasks(location.getGeolocation());
-            } else if (Objects.equals(location.getInstitution(), "Festivalna dvorana Lent Maribor") || Objects.equals(location.getInstitution(), "Dvorana Tabor")) {
+            } else if (Objects.equals(location.getInstitution(), "Dvorana Lent") || Objects.equals(location.getInstitution(), "Dvorana Tabor")) {
                 createMicrophones(location.getGeolocation());
             }
         }
@@ -677,7 +725,6 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             microphonesToRemove.add(microphone);
         }
 
-        // Remove all disco balls collected in the separate list added because of the unexpected behaviour
         for (Actor discoBall : discoBallsToRemove) {
             discoBall.remove();
         }
@@ -727,14 +774,19 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
                 if (eventAnimationVisible) {
                     clearDancingCharacters();
                     danceMusic.stop();
+                    operaMusic.stop();
+                    isSwitchButtonVisible = false;
                 } else {
+                    hudStage.addActor(createButton());
                     initializeDancingCharacters();
                     danceMusic.play();
-                    danceMusic.setLooping(true);
+                    isSwitchButtonVisible = true;
                 }
                 eventAnimationVisible = !eventAnimationVisible;
+                musicButton.setVisible(isSwitchButtonVisible);
             }
         });
+
 
         TextButton quitButton = new TextButton("Quit", skin, "round");
         quitButton.addListener(new ClickListener() {
@@ -762,4 +814,31 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
         return table;
     }
+
+    private Table createButton() {
+        musicButton = new TextButton("Switch", skin, "round");
+        musicButton.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                if (danceMusic.isPlaying()) {
+                    danceMusic.stop();
+                    operaMusic.play();
+                } else if (operaMusic.isPlaying()) {
+                    operaMusic.stop();
+                    danceMusic.play();
+                }
+            }
+        });
+
+        musicButton.setVisible(isSwitchButtonVisible);
+
+        Table buttonTable = new Table();
+        buttonTable.setFillParent(true);
+        buttonTable.top().right();
+        buttonTable.add(musicButton).padTop(20).padRight(20);
+
+        return buttonTable;
+    }
+
+
 }
