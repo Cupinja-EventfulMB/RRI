@@ -4,11 +4,14 @@ import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.InputMultiplexer;
+import com.badlogic.gdx.assets.AssetManager;
+import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.input.GestureDetector;
@@ -41,6 +44,8 @@ import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mygdx.game.assets.AssetDescriptors;
+import com.mygdx.game.assets.RegionNames;
 import com.mygdx.game.lang.Context;
 import com.mygdx.game.lang.LangKt;
 import com.mygdx.game.utils.Config;
@@ -94,7 +99,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     // test marker
     private final Geolocation MARKER_GEOLOCATION = new Geolocation(46.559070, 15.638100);
     // marker and dialog institution
-    private Array<Texture> markerInstitutionTextures;
+    private Array<TextureRegion> markerInstitutionTextures;
     private Dialog markerInfoDialog;
     // animations
     private List<DancingCharacter> dancingCharacters;
@@ -104,11 +109,15 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     private float targetX = 0;
     private float targetY = 0;
     private boolean isZoomedIn = false;
+    public static final AssetManager assetManager = new AssetManager();
+    private TextureAtlas gameplayAtlas;
+    private Music danceMusic;
+
 
 
     private void loadTexturesAndSkin() {
         markerInstitutionTextures = new Array<>();
-        markerInstitutionTextures.add(new Texture(Gdx.files.internal("assets/institution.png")));
+       // markerInstitutionTextures.add(new TextureRegion.findRegion(RegionNames.INSTITUTION));
 
         skin = new Skin(Gdx.files.internal("ui/uiskin.json"));
 
@@ -162,7 +171,16 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             System.out.println("-------------");
         }
 
+        assetManager.load(AssetDescriptors.GAMEPLAY);
+        assetManager.load(AssetDescriptors.DANCE_MUSIC);
+        assetManager.finishLoading();
+        gameplayAtlas = assetManager.get(AssetDescriptors.GAMEPLAY);
+
         loadTexturesAndSkin();
+
+        danceMusic = assetManager.get(AssetDescriptors.DANCE_MUSIC);
+
+        markerInstitutionTextures.add(gameplayAtlas.findRegion(RegionNames.INSTITUTION));
 
         shapeRenderer = new ShapeRenderer();
 
@@ -256,31 +274,31 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         for (Location location : locations) {
             String institutionName = location.getInstitution();
             if ("Festivalna dvorana Lent Maribor".equals(institutionName)) {
-                DancingCharacter dancingMan = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x, beginTile.y - 0.02f, "man", 2);
-                DancingCharacter dancingWoman = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x + 0.1f, beginTile.y, "woman", 5);
+                DancingCharacter dancingMan = new DancingCharacter(gameplayAtlas, location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x, beginTile.y - 0.02f, "man", 2);
+                DancingCharacter dancingWoman = new DancingCharacter(gameplayAtlas, location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x + 0.1f, beginTile.y, "woman", 5);
                 dancingCharacters.add(dancingMan);
                 dancingCharacters.add(dancingWoman);
                 stage.addActor(dancingMan.getImage());
                 stage.addActor(dancingWoman.getImage());
             }
             if ("Dvorana Tabor".equals(institutionName)) {
-                DancingCharacter dancingMan = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x - 0.2f, beginTile.y - 0.02f, "man2", 2);
-                DancingCharacter dancingWoman = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x + 0.1f, beginTile.y, "woman2", 3);
+                DancingCharacter dancingMan = new DancingCharacter(gameplayAtlas, location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x - 0.2f, beginTile.y - 0.02f, "man2", 2);
+                DancingCharacter dancingWoman = new DancingCharacter(gameplayAtlas, location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x + 0.1f, beginTile.y, "woman2", 3);
                 dancingCharacters.add(dancingMan);
                 dancingCharacters.add(dancingWoman);
                 stage.addActor(dancingMan.getImage());
                 stage.addActor(dancingWoman.getImage());
             }
             if ("SNG".equals(institutionName)) {
-                DancingCharacter dancingMan = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x, beginTile.y - 0.02f, "man3", 2);
-                DancingCharacter dancingWoman = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x - 0.1f, beginTile.y - 0.02f, "woman3", 2);
+                DancingCharacter dancingMan = new DancingCharacter(gameplayAtlas, location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x, beginTile.y - 0.02f, "man3", 2);
+                DancingCharacter dancingWoman = new DancingCharacter(gameplayAtlas, location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x - 0.1f, beginTile.y - 0.02f, "woman3", 2);
                 dancingCharacters.add(dancingMan);
                 dancingCharacters.add(dancingWoman);
                 stage.addActor(dancingMan.getImage());
                 stage.addActor(dancingWoman.getImage());
             }
             if ("Stuk".equals(institutionName)) {
-                DancingCharacter dancingPair = new DancingCharacter(location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x - 0.2f, beginTile.y - 0.02f, "pair", 3);
+                DancingCharacter dancingPair = new DancingCharacter(gameplayAtlas, location.getGeolocation().lat, location.getGeolocation().lng, beginTile.x - 0.2f, beginTile.y - 0.02f, "pair", 3);
                 dancingCharacters.add(dancingPair);
                 stage.addActor(dancingPair.getImage());
             }
@@ -443,19 +461,19 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     private Image setImage(Location location) {
         Image institutionImage = new Image();
         if (Objects.equals(location.getInstitution(), "Stuk")) {
-            institutionImage = new Image(new Texture(Gdx.files.internal("assets/stuk.png")));
+            institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.STUK)));
         } else if (Objects.equals(location.getInstitution(), "Lutkovno gledalisce")) {
-            institutionImage = new Image(new Texture(Gdx.files.internal("assets/lutkovnoGledalisceMaribor.png")));
+            institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.LUTKOVNO_GLEDALISCE)));
         } else if (Objects.equals(location.getInstitution(), "SNG")) {
-            institutionImage = new Image(new Texture(Gdx.files.internal("assets/sng.png")));
+            institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.SNG)));
         } else if (Objects.equals(location.getInstitution(), "ODER MINORITI")) {
-            institutionImage = new Image(new Texture(Gdx.files.internal("assets/minoriti.png")));
+            institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.MINORITI)));
         }  else if (Objects.equals(location.getInstitution(), "Narodni dom Maribor")) {
-            institutionImage = new Image(new Texture(Gdx.files.internal("assets/narodniDomMaribor.png")));
+            institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.NARODNI_DOM)));
         } else if (Objects.equals(location.getInstitution(), "Dvorana Tabor")) {
-            institutionImage = new Image(new Texture(Gdx.files.internal("assets/dvoranaTabor.png")));
+            institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.DVORANA_TABOR)));
         } else if (Objects.equals(location.getInstitution(), "Festivalna dvorana Lent Maribor")) {
-            institutionImage = new Image(new Texture(Gdx.files.internal("assets/lent.png")));
+            institutionImage = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.LENT)));
         }
         return institutionImage;
     }
@@ -464,6 +482,8 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     public void dispose() {
         shapeRenderer.dispose();
         hudStage.dispose();
+        danceMusic.dispose();
+        gameplayAtlas.dispose();
 
       //  MapRasterTiles.saveTileCache();
     }
@@ -550,7 +570,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     }
 
     public void createDiscoBall(Geolocation location) {
-        Image discoBall = new Image(new Texture("assets/discoBall.png"));
+        Image discoBall = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.DISCO_BALL)));
         discoBall.setWidth(75f);
         discoBall.setHeight(75f);
 
@@ -578,7 +598,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     }
 
     public void createMasks(Geolocation location) {
-        Image masks = new Image(new Texture("assets/masks.png"));
+        Image masks = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.MASKS)));
         masks.setWidth(70f);
         masks.setHeight(70f);
 
@@ -603,7 +623,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     }
 
     public void createMicrophones(Geolocation location) {
-        Image microphones = new Image(new Texture("assets/microphone.png"));
+        Image microphones = new Image(new TextureRegion(gameplayAtlas.findRegion(RegionNames.MICROPHONE)));
         microphones.setWidth(50f);
         microphones.setHeight(50f);
 
@@ -706,8 +726,11 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             public void clicked(InputEvent event, float x, float y) {
                 if (eventAnimationVisible) {
                     clearDancingCharacters();
+                    danceMusic.stop();
                 } else {
                     initializeDancingCharacters();
+                    danceMusic.play();
+                    danceMusic.setLooping(true);
                 }
                 eventAnimationVisible = !eventAnimationVisible;
             }
