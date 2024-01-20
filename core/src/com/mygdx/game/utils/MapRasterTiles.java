@@ -275,4 +275,16 @@ public class MapRasterTiles {
                 Constants.MAP_HEIGHT - (int) (Math.floor(worldCoordinate[1] * scale) - (beginTileY * MapRasterTiles.TILE_SIZE) - 1)
         );
     }
+
+    public static Vector2 getPixelPositionFloat(double lat, double lng, float beginTileX, float beginTileY) {
+        double[] worldCoordinate = project(lat, lng, MapRasterTiles.TILE_SIZE);
+        // Scale to fit our image
+        double scale = Math.pow(2, Constants.ZOOM);
+
+        // Apply scale to world coordinates to get image coordinates
+        return new Vector2(
+                (int) (Math.floor(worldCoordinate[0] * scale) - (beginTileX * MapRasterTiles.TILE_SIZE)),
+                Constants.MAP_HEIGHT - (int) (Math.floor(worldCoordinate[1] * scale) - (beginTileY * MapRasterTiles.TILE_SIZE) - 1)
+        );
+    }
 }
