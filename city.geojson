@@ -1,0 +1,146 @@
+{
+	"type": "FeatureCollection",
+	"features": [
+	{
+  		"type": "Feature",
+  		"properties": {
+			"element": "Street",
+			"name": "Smetanova ulica"
+		},
+  		"geometry": {
+			"type": "LineString",
+			"coordinates": [
+        		[15.63289765, 46.5594156],
+        		[15.635651716317167, 46.55947804631716],
+        		[15.635651716317167, 46.55947804631716],
+        		[15.63771929, 46.558854],
+        		[15.64296, 46.55783]
+    	  ]
+  		}
+	  },
+
+	{
+  		"type": "Feature",
+  		"properties": {
+			"element": "Institution",
+			"name": "SNG",
+			"address": "Ulica",
+			"events":12.0
+		},
+  		"geometry": {
+			"type": "Polygon",
+			"coordinates": [
+      		[
+        		[15.6435, 46.56015],
+        		[15.6443, 46.56015],
+        		[15.6443, 46.5595],
+        		[15.6435, 46.5595],
+        		[15.6435, 46.56015]
+      		]
+    	  ]
+  		}
+	  },
+
+	{
+  		"type": "Feature",
+  		"properties": {
+			"element": "Square",
+			"name": "Glavni"
+		},
+  		"geometry": {
+			"type": "Polygon",
+			"coordinates": [
+      		[
+        		[15.644743, 46.5578316],
+        		[15.646223, 46.55771],
+        		[15.64608, 46.557243],
+        		[15.644607, 46.557503],
+        		[15.644743, 46.5578316]
+      		]
+    	  ]
+  		}
+	  },
+
+	{
+  		"type": "Feature",
+  		"properties": {
+			"element": "Square",
+			"name": "Trg Revolucije"
+		},
+  		"geometry": {
+			"type": "Polygon",
+			"coordinates": [
+      		[
+        		[15.6441672, 46.553326],
+        		[15.645472997, 46.553806014],
+        		[15.645991734, 46.553719909],
+        		[15.6463673727, 46.552760438],
+        		[15.6441672, 46.553326]
+      		]
+    	  ]
+  		}
+	  },
+
+	{
+  		"type": "Feature",
+  		"properties": {
+			"element": "Statue",
+			"name": "Kodzak"
+		},
+  		"geometry": {
+			"type": "Point",
+			"coordinates": [15.6486237, 46.5605314]
+  		}
+	  },
+
+	{
+  		"type": "Feature",
+  		"properties": {
+			"element": "Statue",
+			"name": "Po cesti"
+		},
+  		"geometry": {
+			"type": "Point",
+			"coordinates": [15.6333024597, 46.561962204]
+  		}
+	  },
+
+	{
+  		"type": "Feature",
+  		"properties": {
+			"element": "Statue",
+			"name": "Kamiski Angeli"
+		},
+  		"geometry": {
+			"type": "Point",
+			"coordinates": [15.6297078732, 46.567857291]
+  		}
+	  },
+
+	{
+  		"type": "Feature",
+  		"properties": {
+			"element": "Lake",
+			"name": "Jezero"
+		},
+  		"geometry": {
+			"type": "Polygon",
+			"coordinates": [
+      		[
+        		[15.6495, 46.5641],
+        		[15.649793892626146, 46.56400450849719],
+        		[15.649975528258148, 46.56375450849719],
+        		[15.649975528258148, 46.56344549150281],
+        		[15.649793892626146, 46.56319549150281],
+        		[15.6495, 46.5631],
+        		[15.649206107373853, 46.56319549150281],
+        		[15.649024471741852, 46.56344549150281],
+        		[15.649024471741852, 46.56375450849719],
+        		[15.649206107373853, 46.56400450849719],
+        		[15.6495, 46.5641]
+      		]
+    	  ]
+  		}
+	  }
+	]
+}

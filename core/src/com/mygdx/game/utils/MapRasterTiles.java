@@ -5,9 +5,16 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.math.Vector2;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class MapRasterTiles {
     //Mapbox
@@ -21,11 +28,32 @@ public class MapRasterTiles {
     //https://www.geoapify.com/get-started-with-maps-api
     static String mapServiceUrl = "https://maps.geoapify.com/v1/tile/";
     static String token = "?&apiKey=" + Keys.GEOAPIFY;
-    static String tilesetId = "klokantech-basic";
+    static String tilesetId = "maptiler-3d";
     static String format = "@2x.png";
 
     //@2x in format means it returns higher DPI version of the image and the image size is 512px (otherwise it is 256px)
     final static public int TILE_SIZE = 512;
+    private static final String CACHE_FILE_PATH = "tile_cache.dat";
+    private static Map<String, byte[]> tileCache = new ConcurrentHashMap<>();
+
+    public static void loadTileCache() {
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(CACHE_FILE_PATH))) {
+            tileCache = (Map<String, byte[]>) ois.readObject();
+            System.out.println("Tile Cache Loaded: " + tileCache);
+        } catch (IOException | ClassNotFoundException e) {
+            System.out.println("Error loading tile cache: " + e.getMessage());
+        }
+    }
+
+    public static void saveTileCache() {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(CACHE_FILE_PATH))) {
+            oos.writeObject(tileCache);
+            System.out.println("Tile Cache Saved: " + tileCache);
+        } catch (IOException e) {
+            System.out.println("Error saving tile cache: " + e.getMessage());
+        }
+    }
+
 
     /**
      * Get raster tile based on zoom and tile number.
@@ -36,10 +64,35 @@ public class MapRasterTiles {
      * @return
      * @throws IOException
      */
+    // Modify the method to store byte[] instead of Texture
     public static Texture getRasterTile(int zoom, int x, int y) throws IOException {
+        String tileKey = getTileKey(zoom, x, y);
+
+        if (tileCache.containsKey(tileKey)) {
+            byte[] pixelData = tileCache.get(tileKey);
+            return getTexture(pixelData);
+        }
+
         URL url = new URL(mapServiceUrl + tilesetId + "/" + zoom + "/" + x + "/" + y + format + token);
         ByteArrayOutputStream bis = fetchTile(url);
-        return getTexture(bis.toByteArray());
+        byte[] pixelData = bis.toByteArray();
+        Texture texture = getTexture(pixelData);
+
+        tileCache.put(tileKey, pixelData);
+
+        return texture;
+    }
+
+    private static String getTileKey(int zoom, int x, int y) {
+        return zoom + "_" + x + "_" + y + format;
+    }
+
+    private static Texture getTexture(byte[] pixelData) {
+        return new Texture(new Pixmap(pixelData, 0, pixelData.length));
+    }
+
+    public static int getTileCacheSize() {
+        return tileCache.size();
     }
 
     /**
@@ -78,8 +131,8 @@ public class MapRasterTiles {
      */
     public static Texture[] getRasterTileZone(ZoomXY zoomXY, int size) throws IOException {
         Texture[] array = new Texture[size * size];
-        int[] factorY = new int[size * size]; //if size is 3 {-1, -1, -1, 0, 0, 0, 1, 1, 1};
-        int[] factorX = new int[size * size]; //if size is 3 {-1, 0, 1, -1, 0, 1, -1, 0, 1};
+        int[] factorY = new int[size * size];
+        int[] factorX = new int[size * size];
 
         int value = (size - 1) / -2;
         for (int i = 0; i < size; i++) {
@@ -91,8 +144,20 @@ public class MapRasterTiles {
         }
 
         for (int i = 0; i < size * size; i++) {
-            array[i] = getRasterTile(zoomXY.zoom, zoomXY.x + factorX[i], zoomXY.y + factorY[i]);
-            System.out.println(zoomXY.zoom + "/" + (zoomXY.x + factorX[i]) + "/" + (zoomXY.y + factorY[i]));
+            String tileKey = getTileKey(zoomXY.zoom, zoomXY.x + factorX[i], zoomXY.y + factorY[i]);
+
+            System.out.println("Tile Key: " + tileKey);
+
+            System.out.println("Adjusted Coordinates: " + (zoomXY.x + factorX[i]) + ", " + (zoomXY.y + factorY[i]));
+
+            if (tileCache.containsKey(tileKey)) {
+                byte[] pixelData = tileCache.get(tileKey);
+                array[i] = getTexture(pixelData);
+                System.out.println("Tile " + tileKey + " retrieved from cache.");
+            } else {
+                array[i] = getRasterTile(zoomXY.zoom, zoomXY.x + factorX[i], zoomXY.y + factorY[i]);
+                System.out.println("Tile " + tileKey + " fetched from API.");
+            }
         }
         return array;
     }
@@ -122,9 +187,9 @@ public class MapRasterTiles {
      * @param array
      * @return
      */
-    public static Texture getTexture(byte[] array) {
+/*    public static Texture getTexture(byte[] array) {
         return new Texture(new Pixmap(array, 0, array.length));
-    }
+    }*/
 
     //https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames#Java
 
@@ -200,6 +265,18 @@ public class MapRasterTiles {
     }
 
     public static Vector2 getPixelPosition(double lat, double lng, int beginTileX, int beginTileY) {
+        double[] worldCoordinate = project(lat, lng, MapRasterTiles.TILE_SIZE);
+        // Scale to fit our image
+        double scale = Math.pow(2, Constants.ZOOM);
+
+        // Apply scale to world coordinates to get image coordinates
+        return new Vector2(
+                (int) (Math.floor(worldCoordinate[0] * scale) - (beginTileX * MapRasterTiles.TILE_SIZE)),
+                Constants.MAP_HEIGHT - (int) (Math.floor(worldCoordinate[1] * scale) - (beginTileY * MapRasterTiles.TILE_SIZE) - 1)
+        );
+    }
+
+    public static Vector2 getPixelPositionFloat(double lat, double lng, float beginTileX, float beginTileY) {
         double[] worldCoordinate = project(lat, lng, MapRasterTiles.TILE_SIZE);
         // Scale to fit our image
         double scale = Math.pow(2, Constants.ZOOM);

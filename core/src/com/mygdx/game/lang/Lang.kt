@@ -3,282 +3,531 @@ package com.mygdx.game.lang
 import com.badlogic.gdx.graphics.Camera
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
-import com.badlogic.gdx.math.EarClippingTriangulator
-import com.badlogic.gdx.math.Vector2
-import com.mygdx.game.utils.Constants
 import com.mygdx.game.utils.MapRasterTiles
 import com.mygdx.game.utils.ZoomXY
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
-import kotlin.Nothing
-import kotlin.math.*
+import kotlin.math.PI
+import kotlin.math.cos
+import com.badlogic.gdx.math.Vector2
+import kotlin.math.sin
 
 const val ERROR_STATE = 0
 
 const val EOF_SYMBOL = -1
 const val SKIP_SYMBOL = 0
-const val ID_SYMBOL = 1
-const val FLOAT_SYMBOL = 2
-const val COMMA_SYMBOL = 3
-const val SEMI_SYMBOL = 4
-const val STRING_SYMBOL = 5
-const val LPAREN_SYMBOL = 8
-const val RPAREN_SYMBOL = 9
-const val BEGIN_SYMBOL = 10
-const val END_SYMBOL = 11
-const val LINE_SYMBOL = 12
-const val MARKER_SYMBOL = 13
-const val BEND_SYMBOL = 14
-const val BUILDING_SYMBOL = 15
-const val ROAD_SYMBOL = 16
-const val LET_SYMBOL = 17
-const val EQUAL_SYMBOL = 18
-const val PLUS_SYMBOL = 19
-const val MINUS_SYMBOL = 20
-
-const val EOF = -1
 const val NEWLINE = '\n'.code
+const val INT = 1
+const val VAR = 2
+const val PLUS = 3
+const val MINUS = 4
+const val LPAREN = 5
+const val RPAREN = 6
+const val LSPAREN = 7
+const val RSPAREN = 8
+const val LCPAREN = 9
+const val RCPAREN = 10
+const val ASSIGN = 11
+const val CITY = 12
+const val STREET = 13
+const val POINT = 14
+const val INSTITUTION = 15
+const val SQUARE = 16
+const val STATUE = 17
+const val STRING = 18
+const val BLOCK = 19
+const val BEND = 20
+const val LINE = 21
+const val COMMA = 22
+const val ADDRESS = 23
+const val DEC_STRING = 24
+const val DEC_INT = 25
+const val DEC_COORD = 26
+const val EVENTS = 27
+const val FST = 28
+const val SND = 29
+const val LAKE = 30
+const val CIRCLE = 31
+const val IF = 32
+const val ELSE = 33
+const val EQUALS = 34
+const val SMALLER = 35
+const val BIGGER = 36
+const val NOTEQUAL = 37
+const val DOUBLE = 38
+const val DEC_DOUBLE = 39
+const val CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+const val STRING_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789.,"
+const val NUMBER_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-interface Regex {
-    fun states(): Set<Int>
-    fun isNullable(): Boolean
-    fun first(): Set<Int>
-    fun last(): Set<Int>
-    fun follow(): Set<Pair<Int, Int>>
-    fun codes(): Map<Int, Int>
-    fun symbols(symbol: Int): Map<Int, Int>
+
+interface DFA {
+    val states: Set<Int>
+    val alphabet: IntRange
+    fun next(state: Int, code: Int): Int
+    fun symbol(state: Int): Int
+    val startState: Int
+    val finalStates: Set<Int>
 }
 
-fun <A,B> product(xs: Set<A>, ys: Set<B>): Set<Pair<A, B>> =
-    xs.flatMap { x -> ys.map {y -> x to y } }.toSet()
+object ForForeachFFFAutomaton: DFA {
+    override val states = (1 .. 120).toSet()
+    override val alphabet = 0 .. 255
+    override val startState = 1
+    override val finalStates = setOf(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 17, 23, 28, 39, 44, 48, 54, 57, 61, 63, 64, 71, 74, 75, 84, 89, 92, 94, 97, 101, 102, 105, 106, 107, 108, 110, 112, 118, 119, 120)
 
-fun <A, B> Collection<Pair<A, B>>.toMultiMap(): Map<A, Set<B>> =
-    this.groupBy({ it.first }, { it.second }).mapValues { it.value.toSet() }
+    private val numberOfStates = states.max() + 1 // plus the ERROR_STATE
+    private val numberOfCodes = alphabet.max() + 1 // plus the EOF
+    private val transitions = Array(numberOfStates) {IntArray(numberOfCodes)}
+    private val values = Array(numberOfStates) {SKIP_SYMBOL}
 
-infix fun <A> Set<A>.overlaps(other: Set<A>) =
-    intersect(other).isNotEmpty()
+    private fun setTransition(from: Int, chr: Char, to: Int) {
+        transitions[from][chr.code + 1] = to // + 1 because EOF is -1 and the array starts at 0
+    }
 
-object Null: Regex {
+    private fun setTransition(from: Int, code: Int, to: Int) {
+        transitions[from][code + 1] = to
+    }
 
-    override fun states(): Set<Int> = emptySet()
+    private fun setSymbol(state: Int, symbol: Int) {
+        values[state] = symbol
+    }
 
-    override fun isNullable(): Boolean = true
-
-    override fun first(): Set<Int> = emptySet()
-
-    override fun last(): Set<Int> = emptySet()
-
-    override fun follow(): Set<Pair<Int, Int>> = emptySet()
-
-    override fun codes(): Map<Int, Int> = emptyMap()
-
-    override fun symbols(symbol: Int): Map<Int, Int> = emptyMap()
-}
-
-class Chr(private val code: Int, private val state: Int): Regex {
-
-    override fun states(): Set<Int> = setOf(state)
-
-    override fun isNullable(): Boolean = false
-
-    override fun first(): Set<Int> = setOf(state)
-
-    override fun last(): Set<Int> = setOf(state)
-
-    override fun follow(): Set<Pair<Int, Int>> = emptySet()
-
-    override fun codes(): Map<Int, Int> =
-        mapOf(state to code)
-
-    override fun symbols(symbol: Int): Map<Int, Int> =
-        mapOf(state to symbol)
-}
-
-class Concat(private val left: Regex, private val right: Regex, private val nullable: Boolean): Regex {
-    override fun states(): Set<Int> =
-        left.states() + right.states()
-
-    override fun isNullable(): Boolean = nullable
-
-    override fun first(): Set<Int> =
-        left.first() + if (left.isNullable()) right.first() else emptySet()
-
-    override fun last(): Set<Int> =
-        right.last() + if (right.isNullable()) left.last() else emptySet()
-
-    override fun follow(): Set<Pair<Int, Int>> =
-        left.follow() + right.follow() +  product(left.last(), right.first())
-
-    override fun codes(): Map<Int, Int> =
-        left.codes() + right.codes()
-
-    override fun symbols(symbol: Int): Map<Int, Int> =
-        left.symbols(symbol) + right.symbols(symbol)
-}
-
-class Union(private val left: Regex, private val right: Regex, private val nullable: Boolean): Regex {
-    override fun states(): Set<Int> =
-        left.states() + right.states()
-
-    override fun isNullable(): Boolean = nullable
-
-    override fun first(): Set<Int> =
-        left.first() + right.first()
-
-    override fun last(): Set<Int> =
-        left.last() + right.last()
-
-    override fun follow(): Set<Pair<Int, Int>> =
-        left.follow() + right.follow()
-
-    override fun codes(): Map<Int, Int> =
-        left.codes() + right.codes()
-
-    override fun symbols(symbol: Int): Map<Int, Int> =
-        left.symbols(symbol) + right.symbols(symbol)
-}
-
-class Plus(private val inner: Regex, private val nullable: Boolean): Regex {
-    override fun states(): Set<Int> =
-        inner.states()
-
-    override fun isNullable(): Boolean =
-        nullable
-
-    override fun first(): Set<Int> =
-        inner.first()
-
-    override fun last(): Set<Int> =
-        inner.last()
-
-    override fun follow() =
-        inner.follow() + product(inner.last(), inner.first())
-
-    override fun codes(): Map<Int, Int> =
-        inner.codes()
-
-    override fun symbols(symbol: Int): Map<Int, Int> =
-        inner.symbols(symbol)
-}
-
-class Label(private val symbol: Int, private val inner: Regex): Regex {
-    override fun states(): Set<Int> =
-        inner.states()
-
-    override fun isNullable(): Boolean =
-        inner.isNullable()
-
-    override fun first(): Set<Int> =
-        inner.first()
-
-    override fun last(): Set<Int> =
-        inner.last()
-
-    override fun follow() =
-        inner.follow()
-
-    override fun codes(): Map<Int, Int> =
-        inner.codes()
-
-    override fun symbols(symbol: Int): Map<Int, Int> =
-        inner.symbols(this.symbol)
-}
-
-operator fun Regex.plus(other: Regex) =
-    Union(this, other, this.isNullable() || other.isNullable())
-
-operator fun Regex.times(other: Regex) =
-    Concat(this, other, this.isNullable() && other.isNullable())
-
-operator fun Regex.unaryPlus() =
-    Plus(this, this.isNullable())
-
-class ChrBuilder {
-    private var counter = 0
-
-    operator fun invoke(code: Int) =
-        Chr(code, counter++)
-
-    operator fun invoke(char: Char) =
-        Chr(char.code, counter++)
-}
-
-fun range(chr: ChrBuilder, chars: Iterable<Char>) =
-    chars.map { chr(it) }.reduce(Regex::plus)
-
-data class DFA(val states: Set<Int>, val transitions: Map<Int, Map<Int, Int>>, val startState: Int, val finalStates: Set<Int>, val symbols: Map<Int, Int>) {
-    fun next(state: Int, code: Int): Int {
+    override fun next(state: Int, code: Int): Int {
         assert(states.contains(state))
-        return transitions[state]!![code] ?: ERROR_STATE
+        assert(alphabet.contains(code))
+        return transitions[state][code + 1]
     }
 
-    fun symbol(state: Int): Int {
+    override fun symbol(state: Int): Int {
         assert(states.contains(state))
-        return symbols[state]!!
+        return values[state]
     }
-}
+    init {
+        // int [0-9]+
+        for (a in '0' .. '9'){
+            setTransition(1,a,2)
+            setTransition(2,a,2)
+        }
+        setSymbol(2,INT)
 
-data class RFA(val states: Set<Int>, val first: Set<Int>, val last: Set<Int> , val follow: Map<Int, Set<Int>>, val codes: Map<Int, Int>, val symbols: Map<Int, Int>) {
-    companion object {
-        fun ofRegex(re: Regex): RFA =
-            RFA(re.states(), re.first(), re.last(), re.follow().toMultiMap(), re.codes(), re.symbols(SKIP_SYMBOL))
+        // variable [a-zA-Z]+[0-9]*
+        for(character in CHARS){
+            setTransition(1, character, 3)
+        }
+        for(character in CHARS){
+            setTransition(3, character, 3)
+        }
+        for(digit in '0'..'9'){
+            setTransition(3, digit, 4)
+        }
+        for(digit in '0'..'9'){
+            setTransition(4, digit, 4)
+        }
+        setSymbol(3, VAR)
+        setSymbol(4,VAR)
+
+        // plus
+        setTransition(1,'+',5)
+        setSymbol(5,PLUS)
+
+        // minus
+        setTransition(1,'-',6)
+        setSymbol(6,MINUS)
+
+        // lparen
+        setTransition(1,'(',7)
+        setSymbol(7,LPAREN)
+
+        // rparen
+        setTransition(1,')',8)
+        setSymbol(8,RPAREN)
+
+        // lsparen
+        setTransition(1,'[',9)
+        setSymbol(9,LSPAREN)
+
+        // rsparen
+        setTransition(1,']',10)
+        setSymbol(10,RSPAREN)
+
+        // lcparen
+        setTransition(1,'{',11)
+        setSymbol(11,LCPAREN)
+
+        // rcparen
+        setTransition(1,'}',12)
+        setSymbol(12,RCPAREN)
+
+        // assign
+        setTransition(1,'=',13)
+        setSymbol(13,ASSIGN)
+
+        // City
+        setTransition(1, 'c', 14)
+        setTransition(14, 'i', 15)
+        setTransition(15, 't', 16)
+        setTransition(16, 'y', 17)
+
+        for(character in CHARS){
+            if ((character != 'i') && (character != 'o') && (character != 'r')) setTransition(14, character, 3)
+            if (character != 't') setTransition(15, character, 3)
+            if (character != 'y') setTransition(16, character, 3)
+            if (character != ' ') setTransition(17, character, 3)
+        }
+        setSymbol(17, CITY)
+
+        // Street
+        setTransition(1, 's', 18)
+        setTransition(18, 't', 19)
+        setTransition(19, 'r', 20)
+        setTransition(20, 'e', 21)
+        setTransition(21, 'e', 22)
+        setTransition(22, 't', 23)
+
+        for(character in CHARS){
+            if ((character != 't') && (character != 'q') && (character != 'n')) setTransition(18, character, 3)
+            if ((character != 'r') && (character != 'a')) setTransition(19, character, 3)
+            if ((character != 'e') && (character !='i')) setTransition(20, character, 3)
+            if (character != 'e') setTransition(21, character, 3)
+            if (character != 't') setTransition(22, character, 3)
+            if (character != ' ') setTransition(23, character, 3)
+        }
+        setSymbol(23, STREET)
+
+        // Point
+        setTransition(1, 'p', 24)
+        setTransition(24, 'o', 25)
+        setTransition(25, 'i', 26)
+        setTransition(26, 'n', 27)
+        setTransition(27, 't', 28)
+
+        for(character in CHARS){
+            if (character != 'o') setTransition(24, character, 3)
+            if (character != 'i') setTransition(25, character, 3)
+            if (character != 'n') setTransition(26, character, 3)
+            if (character != 't') setTransition(27, character, 3)
+            if (character != ' ') setTransition(28, character, 3)
+        }
+        setSymbol(28, POINT)
+
+        // Institution
+        setTransition(1, 'i', 29)
+        setTransition(29, 'n', 30)
+        setTransition(30, 's', 31)
+        setTransition(31, 't', 32)
+        setTransition(32, 'i', 33)
+        setTransition(33, 't', 34)
+        setTransition(34, 'u', 35)
+        setTransition(35, 't', 36)
+        setTransition(36, 'i', 37)
+        setTransition(37, 'o', 38)
+        setTransition(38, 'n', 39)
+
+        for(character in CHARS){
+            if ((character != 'n') && (character != 't') && (character != 'f')) setTransition(29, character, 3)
+            if (character != 's') setTransition(30, character, 3)
+            if (character != 't') setTransition(31, character, 3)
+            if (character != 'i') setTransition(32, character, 3)
+            if (character != 't') setTransition(33, character, 3)
+            if (character != 'u') setTransition(34, character, 3)
+            if (character != 't') setTransition(35, character, 3)
+            if (character != 'i') setTransition(36, character, 3)
+            if (character != 'o') setTransition(37, character, 3)
+            if (character != 'n') setTransition(38, character, 3)
+            if (character != ' ') setTransition(39, character, 3)
+        }
+        setSymbol(39, INSTITUTION)
+
+        // Square
+        setTransition(18, 'q', 40)
+        setTransition(40, 'u', 41)
+        setTransition(41, 'a', 42)
+        setTransition(42, 'r', 43)
+        setTransition(43, 'e', 44)
+
+        for(character in CHARS){
+            if (character != 'u') setTransition(40, character, 3)
+            if (character != 'a') setTransition(41, character, 3)
+            if (character != 'r') setTransition(42, character, 3)
+            if (character != 'e') setTransition(43, character, 3)
+            if (character != ' ') setTransition(44, character, 3)
+        }
+        setSymbol(44, SQUARE)
+
+        // Statue
+        setTransition(19, 'a', 45)
+        setTransition(45, 't', 46)
+        setTransition(46, 'u', 47)
+        setTransition(47, 'e', 48)
+
+        for(character in CHARS){
+            if (character != 't') setTransition(45, character, 3)
+            if (character != 'u') setTransition(46, character, 3)
+            if (character != 'e') setTransition(47, character, 3)
+            if (character != ' ') setTransition(48, character, 3)
+        }
+        setSymbol(48, STATUE)
+
+        // Block
+        setTransition(1, 'b', 50)
+        setTransition(50, 'l', 51)
+        setTransition(51, 'o', 52)
+        setTransition(52, 'c', 53)
+        setTransition(53, 'k', 54)
+
+        for(character in CHARS){
+            if (character != 'l') setTransition(50, character, 3)
+            if (character != 'o') setTransition(51, character, 3)
+            if (character != 'c') setTransition(52, character, 3)
+            if (character != 'k') setTransition(53, character, 3)
+            if (character != ' ') setTransition(54, character, 3)
+        }
+        setSymbol(54, BLOCK)
+
+        // Bend
+        setTransition(50, 'e', 55)
+        setTransition(55, 'n', 56)
+        setTransition(56, 'd', 57)
+        for(character in CHARS){
+            if (character != 'n') setTransition(55, character, 3)
+            if (character != 'd') setTransition(56, character, 3)
+            if (character != ' ') setTransition(57, character, 3)
+        }
+        setSymbol(57, BEND)
+
+        // Line
+        setTransition(1, 'l', 58)
+        setTransition(58, 'i', 59)
+        setTransition(59, 'n', 60)
+        setTransition(60, 'e', 61)
+
+        for(character in CHARS){
+            if ((character != 'i') && (character != 'a')) setTransition(58, character, 3)
+            if (character != 'n') setTransition(59, character, 3)
+            if (character != 'e') setTransition(60, character, 3)
+            if (character != ' ') setTransition(61, character, 3)
+        }
+        setSymbol(61, LINE)
+
+        //" element in STRING_CHARS "
+        setTransition(1, '"', 62)
+        for(character in STRING_CHARS){
+            setTransition(62, character, 62)
+        }
+        setTransition(62,'"', 63)
+        setSymbol(63, STRING)
+
+        // comma
+        setTransition(1,',',64)
+        setSymbol(64, COMMA)
+
+        // address
+        setTransition(1, 'a', 65)
+        setTransition(65, 'd', 66)
+        setTransition(66, 'd', 67)
+        setTransition(67, 'r', 68)
+        setTransition(68, 'e', 69)
+        setTransition(69, 's', 70)
+        setTransition(70, 's', 71)
+
+        for(character in CHARS){
+            if (character != 'd') setTransition(65, character, 3)
+            if (character != 'd') setTransition(66, character, 3)
+            if (character != 'r') setTransition(67, character, 3)
+            if (character != 'e') setTransition(68, character, 3)
+            if (character != 's') setTransition(69, character, 3)
+            if (character != 's') setTransition(70, character, 3)
+            if (character != ' ') setTransition(71, character, 3)
+        }
+        setSymbol(71, ADDRESS)
+
+        setTransition(20, 'i', 72)
+        setTransition(72, 'n', 73)
+        setTransition(73, 'g', 74)
+
+        for(character in CHARS){
+            if (character != 'n') setTransition(72, character, 3)
+            if (character != 'g') setTransition(73, character, 3)
+            if (character != ' ') setTransition(74, character, 3)
+        }
+        setSymbol(74, DEC_STRING)
+
+        //int
+        setTransition(30, 't', 75)
+
+        for(character in CHARS){
+            if (character != ' ') setTransition(75, character, 3)
+        }
+        setSymbol(75, DEC_INT)
+
+        // Coordinate
+        setTransition(14, 'o', 76)
+        setTransition(76, 'o', 77)
+        setTransition(77, 'r', 78)
+        setTransition(78, 'd', 79)
+        setTransition(79, 'i', 80)
+        setTransition(80, 'n', 81)
+        setTransition(81, 'a', 82)
+        setTransition(82, 't', 83)
+        setTransition(83, 'e', 84)
+
+        for(character in CHARS){
+            if (character != 'o') setTransition(76, character, 3)
+            if (character != 'r') setTransition(77, character, 3)
+            if (character != 'd') setTransition(78, character, 3)
+            if (character != 'i') setTransition(79, character, 3)
+            if (character != 'n') setTransition(80, character, 3)
+            if (character != 'a') setTransition(81, character, 3)
+            if (character != 't') setTransition(82, character, 3)
+            if (character != 'e') setTransition(83, character, 3)
+            if (character != ' ') setTransition(84, character, 3)
+        }
+        setSymbol(84, DEC_COORD)
+
+        // events
+        setTransition(1, 'e', 84)
+        setTransition(84, 'v', 85)
+        setTransition(85, 'e', 86)
+        setTransition(86, 'n', 87)
+        setTransition(87, 't', 88)
+        setTransition(88, 's', 89)
+
+        for(character in CHARS){
+            if ((character != 'v') && (character != 'l')) setTransition(84, character, 3)
+            if (character != 'e') setTransition(85, character, 3)
+            if (character != 'n') setTransition(86, character, 3)
+            if (character != 't') setTransition(87, character, 3)
+            if (character != 's') setTransition(88, character, 3)
+            if (character != ' ') setTransition(89, character, 3)
+        }
+        setSymbol(89, EVENTS)
+
+        // fst
+        setTransition(1, 'f', 90)
+        setTransition(90, 's', 91)
+        setTransition(91, 't', 92)
+
+        for(character in CHARS){
+            if (character != 's') setTransition(90, character, 3)
+            if (character != 't') setTransition(91, character, 3)
+            if (character != ' ') setTransition(92, character, 3)
+        }
+        setSymbol(92, FST)
+
+        // snd
+        setTransition(18, 'n', 93)
+        setTransition(93, 'd', 94)
+
+        for(character in CHARS){
+            if (character != 'd') setTransition(93, character, 3)
+            if (character != ' ') setTransition(94, character, 3)
+        }
+        setSymbol(94, SND)
+
+        // Lake
+        setTransition(58, 'a', 95)
+        setTransition(95, 'k', 96)
+        setTransition(96, 'e', 97)
+
+        for(character in CHARS){
+            if (character != 'k') setTransition(95, character, 3)
+            if (character != 'e') setTransition(96, character, 3)
+            if (character != ' ') setTransition(97, character, 3)
+        }
+        setSymbol(97, LAKE)
+
+        // Circle
+        setTransition(15, 'r', 98)
+        setTransition(98, 'c', 99)
+        setTransition(99, 'l', 100)
+        setTransition(100, 'e', 101)
+
+        for(character in CHARS){
+            if (character != 'c') setTransition(98, character, 3)
+            if (character != 'l') setTransition(99, character, 3)
+            if (character != 'e') setTransition(100, character, 3)
+            if (character != ' ') setTransition(101, character, 3)
+        }
+        setSymbol(101, CIRCLE)
+
+        // if
+        setTransition(29, 'f', 102)
+        for(character in CHARS){
+            if (character != ' ') setTransition(102, character, 3)
+        }
+
+        setSymbol(102, IF)
+
+        // else
+        setTransition(84, 'l', 103)
+        setTransition(103, 's', 104)
+        setTransition(104, 'e', 105)
+        for(character in CHARS){
+            if (character != 's') setTransition(103, character, 3)
+            if (character != 'e') setTransition(104, character, 3)
+            if (character != ' ') setTransition(105, character, 3)
+        }
+
+        setSymbol(105, ELSE)
+
+        // equals
+        setTransition(13,'=',106)
+        setSymbol(106, EQUALS)
+
+        // <
+        setTransition(1, '<', 107)
+        setSymbol(107, SMALLER)
+
+        // >
+        setTransition(1, '>', 108)
+        setSymbol(108, BIGGER)
+
+        // !=
+        setTransition(1, '!', 109)
+        setTransition(109, '=', 110)
+        setSymbol(110, NOTEQUAL)
+
+        // Double (int.int)
+        setTransition(2, '.', 111)
+        for (a in '0' .. '9'){
+            setTransition(111,a,112)
+            setTransition(112,a,112)
+        }
+        setSymbol(112, DOUBLE)
+
+        // Double
+        setTransition(1, 'd', 113)
+        setTransition(113, 'o', 114)
+        setTransition(114, 'u', 115)
+        setTransition(115, 'b', 116)
+        setTransition(116, 'l', 117)
+        setTransition(117, 'e', 118)
+
+        for(character in CHARS){
+            if (character != 'o') setTransition(113, character, 3)
+            if (character != 'u') setTransition(114, character, 3)
+            if (character != 'b') setTransition(115, character, 3)
+            if (character != 'l') setTransition(116, character, 3)
+            if (character != 'e') setTransition(117, character, 3)
+            if (character != ' ') setTransition(118, character, 3)
+        }
+        setSymbol(118, DEC_DOUBLE)
+
+        // ignore [\n\r\t ]+
+        setTransition(1,'\n',119)
+        setTransition(1,'\r',119)
+        setTransition(1,'\t',119)
+        setTransition(1,' ',119)
+        setSymbol(119,SKIP_SYMBOL)
+
+        // EOF
+        setTransition(1,-1,120)
+        setSymbol(120,EOF_SYMBOL)
+
     }
-
-    fun subset(): DFA {
-        var counter = 0
-        val renumber = mutableMapOf<Set<Int>, Int>()
-        val transitions = mutableMapOf<Int, Map<Int, Int>>()
-
-        fun cycle(states: Set<Int>): Int =
-            renumber[states] ?: run {
-                val state = counter++
-                renumber[states] = state
-                transitions[state] = states
-                    .mapNotNull(this.follow::get)
-                    .fold(emptySet(), Set<Int>::union)
-                    .groupBy(this.codes::getValue)
-                    .mapValues { (_, next) -> cycle(next.toSet()) }
-                state
-            }
-
-        val startState = cycle(first)
-        val states = renumber.values.toSet()
-        val finalStates = renumber.filter { (states, _) -> states overlaps last }.values.toSet()
-        val symbols = renumber.map { (states, state) -> state to states.maxOf(this.symbols::getValue) }.toMap()
-        return DFA(states, transitions, startState, finalStates, symbols)
-    }
-}
-
-fun buildAutomaton(chr: ChrBuilder, res: Map<Int, Regex>) =
-    RFA.ofRegex(chr(0) * res.map { (symbol, re) -> Label(symbol, re) }.reduce(Regex::plus)).subset()
-
-val AUTOMATON = run {
-    val chr = ChrBuilder()
-    buildAutomaton(chr, mapOf(
-        EOF_SYMBOL to chr(EOF),
-        SKIP_SYMBOL to +(chr(' ') + chr(NEWLINE)),
-        ID_SYMBOL to + range(chr, ('a'..'z') + ('A'..'Z')),
-        //ID_SYMBOL to + (range(chr, ('a'..'z') + ('A'..'Z')) * range(chr,('a'..'z') + ('A'..'Z')+('0'..'9'))),
-        FLOAT_SYMBOL to +range(chr, '0'..'9') * (chr('.') * +range(chr, '0'..'9') + Null),
-        COMMA_SYMBOL to chr(','),
-        SEMI_SYMBOL to chr(';'),
-        STRING_SYMBOL to chr('"') * (+range(chr, (' ' .. '~')  - '"') + Null) * chr('"'),
-        LPAREN_SYMBOL to chr('('),
-        RPAREN_SYMBOL to chr(')'),
-        BEGIN_SYMBOL to chr('b') * chr('e') * chr('g') * chr('i') * chr('n'),
-        END_SYMBOL to chr('e') * chr('n') * chr('d'),
-        LINE_SYMBOL to chr('l') * chr('i') * chr('n') * chr('e'),
-        MARKER_SYMBOL to chr('m') * chr('a') * chr('r') * chr('k') * chr('e') * chr('r'),
-        BEND_SYMBOL to chr('b') * chr('e') * chr('n') * chr('d'),
-        BUILDING_SYMBOL to chr('b') * chr('u') * chr('i') * chr('l') * chr('d') * chr('i') * chr('n') * chr('g'),
-        ROAD_SYMBOL to chr('r') * chr('o') * chr('a') * chr('d'),
-        LET_SYMBOL to chr('l') * chr('e') * chr('t'),
-        EQUAL_SYMBOL to chr('='),
-        PLUS_SYMBOL to chr('+'),
-        MINUS_SYMBOL to chr('-')
-    ))
 }
 
 data class Token(val symbol: Int, val lexeme: String, val startRow: Int, val startColumn: Int)
@@ -306,14 +555,14 @@ class Scanner(private val automaton: DFA, private val stream: InputStream) {
         var state = automaton.startState
         while (true) {
             val nextState = automaton.next(state, code)
-            if (nextState == ERROR_STATE) break // Longest match
+            if (nextState == ERROR_STATE) break
 
             state = nextState
             updatePosition(code)
             buffer.add(code.toChar())
             code = stream.read()
         }
-        last = code // The code following the current lexeme is the first code of the next lexeme
+        last = code
 
         if (automaton.finalStates.contains(state)) {
             val symbol = automaton.symbol(state)
@@ -331,20 +580,45 @@ class Scanner(private val automaton: DFA, private val stream: InputStream) {
 
 fun name(symbol: Int) =
     when (symbol) {
-        ID_SYMBOL -> "id"
-        FLOAT_SYMBOL -> "float"
-        COMMA_SYMBOL -> "comma"
-        SEMI_SYMBOL -> "semi"
-        STRING_SYMBOL -> "string"
-        LPAREN_SYMBOL -> "lparen"
-        RPAREN_SYMBOL -> "rparen"
-        BEGIN_SYMBOL -> "begin"
-        END_SYMBOL -> "end"
-        LINE_SYMBOL -> "line"
-        MARKER_SYMBOL -> "marker"
-        BEND_SYMBOL -> "bend"
-        BUILDING_SYMBOL -> "building"
-        ROAD_SYMBOL -> "road"
+        INT -> "int"
+        VAR -> "variable"
+        PLUS -> "plus"
+        MINUS -> "minus"
+        LPAREN -> "lparen"
+        RPAREN -> "rparen"
+        LSPAREN -> "lsparen"
+        RSPAREN -> "rsparen"
+        LCPAREN -> "lcparen"
+        RCPAREN -> "rcparen"
+        ASSIGN -> "assign"
+        CITY -> "city"
+        STREET -> "street"
+        POINT -> "point"
+        INSTITUTION -> "institution"
+        SQUARE -> "square"
+        STATUE -> "statue"
+        STRING -> "string"
+        BLOCK -> "block"
+        BEND -> "bend"
+        LINE -> "line"
+        COMMA -> "comma"
+        ADDRESS -> "address"
+        DEC_STRING -> "stringVar"
+        DEC_COORD -> "coordinateVar"
+        DEC_INT -> "intVar"
+        EVENTS -> "events"
+        FST -> "first"
+        SND -> "second"
+        LAKE -> "lake"
+        CIRCLE -> "circle"
+        IF -> "if"
+        ELSE -> "else"
+        EQUALS -> "equals"
+        SMALLER -> "smaller"
+        BIGGER -> "bigger"
+        NOTEQUAL -> "notequal"
+        DOUBLE -> "double"
+        DEC_DOUBLE -> "doubleVar"
         else -> throw Error("Invalid symbol")
     }
 
@@ -356,594 +630,1451 @@ fun printTokens(scanner: Scanner) {
     }
 }
 
-class ParseException(symbol: Int, row: Int, column: Int) : Exception("PARSE ERROR (${name(symbol)}) at $row:$column")
+data class Coordinate(val name: String, var longtitude: Double, var latitude: Double)
 
-class Parser(private val scanner: Scanner) {
-    private var last: Token? = null
-
-    private fun panic(): Nothing =
-        last?.let { throw ParseException(it.symbol, it.startRow, it.startColumn) } ?: error("cannot happen")
-
-    fun parse(): City {
-        last = scanner.getToken()
-        val result = City(parseBlock())
-        return when(last?.symbol) {
-            EOF_SYMBOL -> result
-            else -> panic()
-        }
-    }
-
-    private fun parseBlock(): Block =
-        when (last?.symbol) {
-            BUILDING_SYMBOL -> {
-                parseTerminal(BUILDING_SYMBOL)
-                val name = parseTerminal(STRING_SYMBOL).trim('"')
-                parseTerminal(BEGIN_SYMBOL)
-                Building(name, parseStmt(), parseBlock())
-            }
-            ROAD_SYMBOL -> {
-                parseTerminal(ROAD_SYMBOL)
-                val name = parseTerminal(STRING_SYMBOL).trim('"')
-                parseTerminal(BEGIN_SYMBOL)
-                Road(name, parseStmt(), parseBlock())
-            }
-            MARKER_SYMBOL -> {
-                parseTerminal(MARKER_SYMBOL)
-                Marker(parseTerminal(STRING_SYMBOL).trim('"'), parseExpr(), parseBlock())
-            }
-            EOF_SYMBOL ->
-                Final()
-            else -> panic()
-        }
-
-    private fun parseStmt(): Stmt =
-        when(last?.symbol) {
-            LET_SYMBOL -> {
-                parseTerminal(LET_SYMBOL)
-                val name = parseTerminal(ID_SYMBOL)
-                parseTerminal(EQUAL_SYMBOL)
-                val expr = parseExpr()
-                parseTerminal(SEMI_SYMBOL)
-                Let(name, expr, parseStmt())
-            }
-            LINE_SYMBOL -> {
-                parseTerminal(LINE_SYMBOL)
-                parseTerminal(LPAREN_SYMBOL)
-                val from = parseExpr()
-                parseTerminal(COMMA_SYMBOL)
-                val to = parseExpr()
-                parseTerminal(RPAREN_SYMBOL)
-                parseTerminal(SEMI_SYMBOL)
-                Line(from, to, parseStmt())
-            }
-            BEND_SYMBOL -> {
-                parseTerminal(BEND_SYMBOL)
-                parseTerminal(LPAREN_SYMBOL)
-                val from = parseExpr()
-                parseTerminal(COMMA_SYMBOL)
-                val to = parseExpr()
-                parseTerminal(COMMA_SYMBOL)
-                val angle = parseExpr()
-                parseTerminal(RPAREN_SYMBOL)
-                parseTerminal(SEMI_SYMBOL)
-                Bend(from, to, angle, parseStmt())
-            }
-            END_SYMBOL -> {
-                parseTerminal(END_SYMBOL)
-                End()
-            }
-            else -> panic()
-        }
-
-    private fun parseExpr(): Expr = parseAdditive()
-
-
-    private fun parseAdditive(): Expr =
-        when(last?.symbol) {
-            FLOAT_SYMBOL, MINUS_SYMBOL, ID_SYMBOL, LPAREN_SYMBOL ->
-                parseAdditiveTail(parseUnary())
-            else -> panic()
-        }
-
-    private fun parseAdditiveTail(accumulator: Expr): Expr =
-        when(last?.symbol) {
-            PLUS_SYMBOL -> {
-                parseTerminal(PLUS_SYMBOL)
-                parseAdditiveTail(Add(accumulator, parseUnary()))
-            }
-            MINUS_SYMBOL -> {
-                parseTerminal(MINUS_SYMBOL)
-                parseAdditiveTail(Sub(accumulator, parseUnary()))
-            }
-            RPAREN_SYMBOL, COMMA_SYMBOL, SEMI_SYMBOL, EOF_SYMBOL, MARKER_SYMBOL, ROAD_SYMBOL, BUILDING_SYMBOL ->
-                accumulator
-            else -> panic()
-        }
-
-    private fun parseUnary(): Expr =
-        when(last?.symbol) {
-            MINUS_SYMBOL -> {
-                parseTerminal(MINUS_SYMBOL)
-                UnaryMinus(parsePrimary())
-            }
-            FLOAT_SYMBOL, ID_SYMBOL, LPAREN_SYMBOL ->
-                parsePrimary()
-            else -> panic()
-        }
-
-    private fun parsePrimary(): Expr =
-        when(last?.symbol) {
-            FLOAT_SYMBOL -> {
-                Num(parseTerminal(FLOAT_SYMBOL).toDouble())
-            }
-            ID_SYMBOL -> {
-                Var(parseTerminal(ID_SYMBOL))
-            }
-            LPAREN_SYMBOL -> {
-                parseTerminal(LPAREN_SYMBOL)
-                parsePrimaryTail(parseExpr())
-            }
-            else -> panic()
-        }
-
-    private fun parsePrimaryTail(first: Expr): Expr =
-        when(last?.symbol) {
-            COMMA_SYMBOL -> {
-                parseTerminal(COMMA_SYMBOL)
-                val second = parseExpr()
-                parseTerminal(RPAREN_SYMBOL)
-                Point(first, second)
-            }
-            RPAREN_SYMBOL -> {
-                parseTerminal(RPAREN_SYMBOL)
-                first
-            }
-            else -> panic()
-        }
-
-    private fun parseTerminal(symbol: Int): String =
-        if (last?.symbol == symbol) {
-            val lexeme = last!!.lexeme
-            last = scanner.getToken()
-            lexeme
-        } else {
-            panic()
-        }
-}
-
-object TypeException: Exception("TYPE ERROR")
-
-// RRI
 data class Context(val shapeRenderer: ShapeRenderer, val camera: Camera, val beginTile: ZoomXY)
 
-// RRI
-data class Coordinates(val lat: Double, val lon: Double) {
-
-    fun toGeoJSON(): JSONArray =
-        JSONArray(listOf(lon, lat))
-
-    fun toPixelPosition(beginTile: ZoomXY): Vector2 =
-        MapRasterTiles.getPixelPosition(lat, lon, MapRasterTiles.TILE_SIZE, Constants.ZOOM, beginTile.x, beginTile.y, Constants.MAP_HEIGHT)
-
-    operator fun plus(other: Coordinates) =
-        Coordinates(lat + other.lat, lon + other.lon)
-
-    operator fun times(s: Double) =
-        Coordinates(s * lat, s * lon)
-
-    fun angle(other: Coordinates) =
-        atan2(other.lon - lon, other.lat - lat)
-
-    fun dist(other: Coordinates) =
-        hypot(other.lat - lat, other.lon - lon)
-
-    fun offset(s: Double, angle: Double) =
-        this + Coordinates(cos(angle), sin(angle)) * s
-}
-
-// RRI
-fun List<Coordinates>.toDeconstructedPixelPositions(ctx: Context) =
-    this.map { it.toPixelPosition(ctx.beginTile)}
-        .flatMap { listOf(it.x, it.y) }
-        .toFloatArray()
-
-// RRI
-class Bezier(private val p0: Coordinates, private val p1: Coordinates, private val p2: Coordinates, private val p3: Coordinates) {
-
-    fun at(t: Double) =
-        p0 * (1.0 - t).pow(3.0) + p1 * 3.0 * (1.0 - t).pow(2.0) * t + p2 * 3.0 * (1.0 - t) * t.pow(2.0) + p3 * t.pow(3.0)
-
-    fun toPoints(segmentsCount: Int): List<Coordinates> {
-        val ps = mutableListOf<Coordinates>()
-        for (i in 0 .. segmentsCount) {
-            val t = i / segmentsCount.toDouble()
-            ps.add(at(t))
-        }
-        return ps
-    }
-
-    fun approxLength(): Double {
-        val midpoint = at(0.5)
-        return p0.dist(midpoint) + midpoint.dist(p3)
-    }
-
-    fun resolutionToSegmentsCount(resolution: Double) =
-        (resolution * approxLength()).coerceAtLeast(2.0).toInt()
-
-    companion object {
-        fun bend(t0: Coordinates, t1: Coordinates, relativeAngle: Double): Bezier {
-            val relativeAngle = Math.toRadians(relativeAngle)
-            val oppositeRelativeAngle = PI - relativeAngle
-
-            val angle = t0.angle(t1)
-            val dist = t0.dist(t1)
-            val constant = (4 / 3) * tan(PI / 8)
-
-            val c0 = t0.offset(constant * dist, angle + relativeAngle)
-            val c1 = t1.offset(constant * dist, angle + oppositeRelativeAngle)
-
-            return Bezier(t0, c0, c1, t1)
-        }
-    }
-}
-
-interface Expr {
-    fun evalPartial(env: Map<String, Expr>): Expr
-
-    fun add(other: Expr): Expr =
-        throw TypeException
-
-    fun addNum(first: Num): Expr =
-        throw TypeException
-
-    fun addPoint(first: Point): Expr =
-        throw TypeException
-
-    fun sub(other: Expr): Expr =
-        throw TypeException
-
-    fun subNum(first: Num): Expr =
-        throw TypeException
-
-    fun subPoint(first: Point): Expr =
-        throw TypeException
-
-    fun unaryMinus(): Expr =
-        throw TypeException
-
-    fun toCoordinate(): Double =
-        throw TypeException
-
-    fun toCoordinates(): Coordinates =
-        throw TypeException
-}
-
-class UnaryMinus(private val inner: Expr): Expr {
-    override fun toString(): String =
-        "-($inner)"
-
-    override fun evalPartial(env: Map<String, Expr>): Expr =
-        inner.unaryMinus()
-}
-
-class Add(private val left: Expr, private val right: Expr): Expr {
-    override fun toString(): String =
-        "($left + $right)"
-
-    override fun evalPartial(env: Map<String, Expr>): Expr =
-        left.evalPartial(env).add(right.evalPartial(env))
-}
-
-class Sub(private val left: Expr, private val right: Expr): Expr {
-    override fun toString(): String =
-        "($left - $right)"
-
-    override fun evalPartial(env: Map<String, Expr>): Expr =
-        left.evalPartial(env).sub(right.evalPartial(env))
-}
-
-class Var(private val name: String): Expr {
-    override fun toString(): String =
-        name
-
-    override fun evalPartial(env: Map<String, Expr>): Expr =
-        env[name]!!
-}
-
-class Point(private val left: Expr, private val right: Expr): Expr {
-    override fun toString(): String =
-        "($left, $right)"
-
-    override fun evalPartial(env: Map<String, Expr>): Expr =
-        Point(left.evalPartial(env), right.evalPartial(env))
-
-    override fun add(other: Expr): Expr =
-        other.addPoint(this)
-
-    override fun addPoint(first: Point): Expr =
-        Point(first.left.add(this.left), first.right.add(this.right))
-
-    override fun sub(other: Expr): Expr =
-        other.subPoint(this)
-
-    override fun subPoint(first: Point): Expr =
-        Point(first.left.sub(this.left), first.right.sub(this.right))
-
-    override fun unaryMinus(): Expr =
-        Point(left.unaryMinus(), right.unaryMinus())
-
-    override fun toCoordinates(): Coordinates =
-        Coordinates(left.toCoordinate(), right.toCoordinate())
-}
-
-class Num(private val value: Double): Expr {
-    override fun unaryMinus(): Expr =
-        Num(-value)
-
-    override fun toString(): String =
-        value.toString()
-
-    override fun evalPartial(env: Map<String, Expr>): Expr =
-        this
-
-    override fun add(other: Expr): Expr =
-        other.addNum(this)
-
-    override fun addNum(first: Num): Expr =
-        Num(first.value + this.value)
-
-    override fun sub(other: Expr): Expr =
-        other.subNum(this)
-
-    override fun subNum(first: Num): Expr =
-        Num(first.value - this.value)
-
-    override fun toCoordinate(): Double =
-        value
-}
-
-interface Stmt {
-    fun evalPartial(env: Map<String, Expr>): Stmt
-
-    fun render(ctx: Context): Unit =
-        throw TypeException
-
-    fun outline(): List<List<Coordinates>> =
-        throw TypeException
-}
-
-class Let(private val name: String, private var expr: Expr, private var next: Stmt): Stmt {
-
-    override fun toString(): String =
-        "let $name = $expr;\n$next"
-
-    override fun evalPartial(env: Map<String, Expr>): Stmt =
-        next.evalPartial(env + (name to expr.evalPartial(env)))
-}
-
-class Line(private val from: Expr, private val to: Expr, val next: Stmt): Stmt {
-    override fun toString(): String =
-        "line($from, $to);\n$next"
-
-    override fun evalPartial(env: Map<String, Expr>): Stmt =
-        Line(from.evalPartial(env), to.evalPartial(env), next.evalPartial(env))
-
-    // RRI
-    override fun render(ctx: Context): Unit {
-        ctx.shapeRenderer.line(from.toCoordinates().toPixelPosition(ctx.beginTile), to.toCoordinates().toPixelPosition(ctx.beginTile))
-        next.render(ctx)
-    }
-
-    override fun outline(): List<List<Coordinates>> =
-        listOf(listOf(from.toCoordinates(), to.toCoordinates())) + next.outline()
-}
-
-class Bend(private val from: Expr, private val to: Expr, private val angle: Expr, private val next: Stmt): Stmt {
-    override fun toString(): String =
-        "bend($from, $to);\n$next"
-
-    override fun evalPartial(env: Map<String, Expr>): Stmt =
-        Bend(from.evalPartial(env), to.evalPartial(env), angle.evalPartial(env), next.evalPartial(env))
-
-    // RRI
-    private fun toPoints(): List<Coordinates> {
-        val b = Bezier.bend(from.toCoordinates(), to.toCoordinates(), angle.toCoordinate())
-        return b.toPoints(b.resolutionToSegmentsCount(500.0))
-    }
-
-    // RRI
-    override fun outline(): List<List<Coordinates>> =
-        listOf(toPoints()) + next.outline()
-
-    // RRI
-    override fun render(ctx: Context): Unit {
-        val vertices = toPoints()
-            .toDeconstructedPixelPositions(ctx)
-        ctx.shapeRenderer.polyline(vertices)
-        next.render(ctx)
-    }
-
-}
-
-class End: Stmt {
-    override fun toString(): String =
-        "end"
-
-    override fun evalPartial(env: Map<String, Expr>): Stmt =
-        this
-
-    // RRI
-    override fun render(ctx: Context) {}
-
-    // RRI
-    override fun outline(): List<List<Coordinates>> = emptyList()
-}
-
-
-interface Block {
-    fun evalPartial(env: Map<String, Expr>): Block
-
-    fun toGeoJSON(): List<JSONObject> =
-        throw TypeException
-
-    // RRI
-    fun render(ctx: Context): Unit =
-        throw TypeException
-}
-
-object PolygonException: Exception("POLYGON ERROR")
-
-// RRI
-fun List<List<Coordinates>>.flatten(): List<Coordinates> {
-    val segment = first() // It doesn't matter where we start
-    return this.flattenHelper(segment.last())
-}
-
-// RRI
-fun List<List<Coordinates>>.flattenHelper(active: Coordinates): List<Coordinates> =
-    if (this.isEmpty())
-        emptyList()
-    else {
-        val (connected, other) = this.partition { segment -> segment.first() == active }
-        if (connected.size != 1) throw PolygonException
-        val segment = connected.first()
-        segment.drop(1) + other.flattenHelper(segment.last())
-    }
-
-// RRI
-fun List<Coordinates>.close(): List<Coordinates> = // Close the loop
-    this + listOf(this.first())
-
-class Building(private val name: String, private val stmt: Stmt, private val next: Block): Block {
-    override fun toString(): String =
-        "building \"$name\" begin\n$stmt$next"
-
-    override fun evalPartial(env: Map<String, Expr>): Block =
-        Building(name, stmt.evalPartial(env), next.evalPartial(env))
-
-    // RRI
-    override fun render(ctx: Context) {
-        ctx.shapeRenderer.projectionMatrix = ctx.camera.combined
-        ctx.shapeRenderer.color = Color.GREEN
+class Parser(private val scanner: Scanner, private var ctx: Context) {
+    private var last: Token? = null
+    private var geoJSON : String = "{\n\t\"type\": \"FeatureCollection\",\n\t\"features\": ["
+    var fileName = "city.geojson"
+
+    private val variableStringMap = mutableMapOf<String, String>()
+    private val variableDoubleMap = mutableMapOf<String, Double>()
+    private val variableIntMap = mutableMapOf<String, Int>()
+    private var variableCoordPair: MutableList<Coordinate> = mutableListOf()
+
+    private val insideVariableStringMap = mutableMapOf<String, String>()
+    private val insideVariableDoubleMap = mutableMapOf<String, Double>()
+    private val insideVariableIntMap = mutableMapOf<String, Int>()
+    private var insideVariableCoordPair: MutableList<Coordinate> = mutableListOf()
+
+    fun parse(): Boolean {
+        ctx.shapeRenderer.setProjectionMatrix(ctx.camera.combined);
         ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Filled)
-        val vertices = stmt.outline()
-            .flatten()
-            .toDeconstructedPixelPositions(ctx)
-
-        val triangulator = EarClippingTriangulator()
-        val triangles = triangulator.computeTriangles(vertices)
-        for (i in 0 until triangles.size step 3) {
-            val t0 = triangles[i + 0].toInt()
-            val t1 = triangles[i + 1].toInt()
-            val t2 = triangles[i + 2].toInt()
-            val (x0, y0) = vertices[2 * t0] to vertices[2 * t0 + 1]
-            val (x1, y1) = vertices[2 * t1] to vertices[2 * t1 + 1]
-            val (x2, y2) = vertices[2 * t2] to vertices[2 * t2 + 1]
-            ctx.shapeRenderer.triangle(x0, y0, x1, y1, x2, y2)
-        }
-        ctx.shapeRenderer.end()
-        next.render(ctx)
-    }
-
-    override fun toGeoJSON(): List<JSONObject> =
-        listOf(JSONObject()
-            .put("type", "Feature")
-            .put("geometry", JSONObject()
-                .put("type", "Polygon")
-                .put("coordinates", JSONArray(listOf(JSONArray(stmt.outline().flatten().close().map { it.toGeoJSON() })))))
-            .put("properties", JSONObject()
-                .put("name", name))) + next.toGeoJSON()
-}
-
-class Road(private val name: String, private val stmt: Stmt, private val next: Block): Block {
-    override fun toString(): String =
-        "road \"$name\" begin\n$stmt$next"
-
-    override fun evalPartial(env: Map<String, Expr>): Block =
-        Road(name, stmt.evalPartial(env), next.evalPartial(env))
-
-    // RRI
-    override fun render(ctx: Context) {
-        ctx.shapeRenderer.projectionMatrix = ctx.camera.combined
-        ctx.shapeRenderer.color = Color.BLUE
-        ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Line)
-        stmt.render(ctx)
-        ctx.shapeRenderer.end()
-        next.render(ctx)
-    }
-
-    override fun toGeoJSON(): List<JSONObject> =
-        listOf(JSONObject()
-            .put("type", "Feature")
-            .put("geometry", JSONObject()
-                .put("type", "MultiLineString")
-                .put("coordinates", JSONArray(stmt.outline().map { segment -> JSONArray(segment.map { it.toGeoJSON() }) })))
-            .put("properties", JSONObject()
-                .put("name", name))) + next.toGeoJSON()
-}
-
-class Marker(private val name: String, private val at: Expr, private val next: Block): Block {
-    override fun toString(): String =
-        "marker \"$name\" $at\n$next"
-
-    override fun evalPartial(env: Map<String, Expr>): Block =
-        Marker(name, at.evalPartial(env), next.evalPartial(env))
-
-    // RRI
-    override fun render(ctx: Context) {
-        val position = at.toCoordinates().toPixelPosition(ctx.beginTile)
-        ctx.shapeRenderer.projectionMatrix = ctx.camera.combined
         ctx.shapeRenderer.color = Color.RED
-        ctx.shapeRenderer.begin(ShapeRenderer.ShapeType.Filled)
-        ctx.shapeRenderer.circle(position.x, position.y, 10.0f)
-        ctx.shapeRenderer.end()
-        next.render(ctx)
+        last = scanner.getToken()
+        val status = City()
+
+        /* println("Elements in variableStringMap:")
+         for ((key, value) in variableStringMap) {
+             println("$key -> $value")
+         }
+
+         println("\nElements in variableIntMap:")
+         for ((key, value) in variableIntMap) {
+             println("$key -> $value")
+         }
+
+         println("\nElements in variableDoubleMap:")
+         for ((key, value) in variableDoubleMap) {
+             println("$key -> $value")
+         }
+
+         println("\nElements in variableCoordPair:")
+         for (coordinate in variableCoordPair) {
+             println(coordinate)
+         }
+
+         */
+        var file = File(fileName)
+        file.createNewFile()
+        geoJSON = geoJSON.substring(0, geoJSON.length-2)
+        geoJSON += "\n\t]\n}"
+        file.writeText(geoJSON)
+        ctx.shapeRenderer.end();
+        translateGeoJsonFromFile("city.geojson")
+        return when (last?.symbol) {
+            EOF_SYMBOL -> status
+            else -> false
+        }
     }
 
-    override fun toGeoJSON(): List<JSONObject> =
-        listOf(JSONObject()
-            .put("type", "Feature")
-            .put("geometry", JSONObject()
-                .put("type", "Point")
-                .put("coordinates", JSONArray(at.toCoordinates().toGeoJSON())))
-            .put("properties", JSONObject()
-                .put("name", name))) + next.toGeoJSON()
+    // City ::= city string { Expression }
+    fun City(): Boolean {
+        return recognizeTerminal(CITY) && recognizeTerminal(STRING) && recognizeTerminal(LCPAREN) && Expression() && recognizeTerminal(RCPAREN)
+    }
+
+    // Expression ::= Operations MandatoryElementsList AdditionalElementsList
+    fun Expression(): Boolean {
+        return Operations(true) && MandatoryElementsList() && AdditionalElementsList()
+    }
+
+    // Operations ::= Operation Operations | e
+
+    fun Operations(status: Boolean): Boolean {
+        if (Operation(status) && Operations(status))
+            return true
+        else return true
+    }
+
+    // Operation ::= AssignString | AssignInt | AssignCoord | AssignDouble | IfElse
+
+    fun Operation(status: Boolean): Boolean {
+        if(last?.symbol == DEC_STRING) {
+            return AssignString(status)
+        } else if(last?.symbol == DEC_INT) {
+            return AssignInt(status)
+        } else if(last?.symbol == DEC_COORD) {
+            return AssignCoord(status)
+        } else if(last?.symbol == IF) {
+            return IfElse(status)
+        } else if(last?.symbol == DEC_DOUBLE) {
+            return AssignDouble(status)
+        }
+        return false
+    }
+
+    // DoubleExpr = int DoubleExpr' | var DoubleExpr' | double DoubleExpr'
+    // DoubleExpr' = + DoubleExpr | - DoubleExpr | e
+
+    fun DoubleExpr(): Pair<Boolean, Double?> {
+        if (last?.symbol == INT) {
+            val intValue = last?.lexeme?.toDouble()
+            recognizeTerminal(INT)
+            if (intValue != null) {
+                return DoubleExprPrime(intValue)
+            }
+        } else if (last?.symbol == VAR) {
+            val stringValue = last?.lexeme
+            recognizeTerminal(VAR)
+            var doubleFoundValue = insideVariableDoubleMap[stringValue]
+            if (doubleFoundValue == null) {
+                doubleFoundValue = variableDoubleMap[stringValue]
+            }
+            if (doubleFoundValue != null) {
+                return DoubleExprPrime(doubleFoundValue)
+            }
+            var foundValue = insideVariableIntMap[stringValue]
+            if (foundValue == null) {
+                foundValue = variableIntMap[stringValue]
+            }
+            if (foundValue != null) {
+                return DoubleExprPrime(foundValue.toDouble())
+            }
+        } else if (last?.symbol == DOUBLE) {
+            val doubleValue = last?.lexeme?.toDouble()
+            recognizeTerminal(DOUBLE)
+            if (doubleValue != null) {
+                return DoubleExprPrime(doubleValue)
+            }
+        }
+        return Pair(false, null)
+    }
+
+    fun DoubleExprPrime(inValue: Double): Pair<Boolean, Double?> {
+        if (last?.symbol == PLUS) {
+            recognizeTerminal(PLUS)
+            val result = DoubleExpr()
+            if (result.first) {
+                val computedValue = inValue + result.second!!
+                return Pair(true, computedValue)
+            }
+        } else if (last?.symbol == MINUS) {
+            recognizeTerminal(MINUS)
+            val result = DoubleExpr()
+            if (result.first) {
+                val computedValue = inValue - result.second!!
+                return Pair(true, computedValue)
+            }
+        }
+        return Pair(true, inValue)
+    }
+
+    //InsideOperations ::= InsideOperation InsideOperations
+
+    fun InsideOperations(status: Boolean): Boolean {
+        if (InsideOperation(status) && InsideOperations(status))
+            return true
+        else return true
+    }
+
+    // InsideOperation ::= InsideAssignString | InsideAssignInt | InsideAssignCoord
+
+    fun InsideOperation(status: Boolean): Boolean {
+        if(last?.symbol == DEC_STRING) {
+            return InsideAssignString(status)
+        } else if(last?.symbol == DEC_INT) {
+            return InsideAssignInt(status)
+        } else if(last?.symbol == DEC_COORD) {
+            return InsideAssignCoord(status)
+        } else if(last?.symbol == IF) {
+            return InsideIfElse(status)
+        } else if(last?.symbol == DEC_DOUBLE) {
+            return InsideAssignDouble(status)
+        }
+        return false
+    }
+
+    // MandatoryElementsList ::= MandatoryElements MandatoryElements'
+
+    fun MandatoryElementsList(): Boolean {
+        return MandatoryElements() && MandatoryElementsPrime()
+    }
+
+    // MandatoryElements ::= Streets Institutions
+
+    fun MandatoryElements(): Boolean {
+        if(last?.symbol == STREET) {
+            return Streets()
+        } else if (last?.symbol == INSTITUTION) {
+            return Institutions()
+        }  else return false
+    }
+
+    // MandatoryElements' ::= MandatoryElementsList | e
+
+    fun MandatoryElementsPrime(): Boolean {
+        if (MandatoryElementsList())
+            return true
+        else return true
+    }
+
+    // AdditionalElementsList ::= AdditionalElements AdditionalElementsList
+    fun AdditionalElementsList(): Boolean {
+        if(AdditionalElements() && AdditionalElementsList())
+            return true
+        else return true
+    }
+
+    // AdditionalElements ::= Squares | Statues | Lakes
+    fun AdditionalElements(): Boolean {
+        if (last?.symbol == SQUARE) {
+            return Squares()
+        } else if (last?.symbol == STATUE) {
+            return Statues()
+        } else if (last?.symbol == LAKE) {
+            return Lakes()
+        } else return false
+    }
+    // IfElse ::=  if ( IntExpr Compare IntExpr ) { Operations } IfElse'
+    // Compare ::= == | != | < | >
+    // IfElse' ::= else { Operations } | e
+    fun IfElse(status: Boolean): Boolean {
+        if (recognizeTerminal(IF) && recognizeTerminal(LPAREN)) {
+            var firstVal = DoubleExpr()
+            if (firstVal.first) {
+                if (recognizeTerminal(EQUALS)) {
+                    var secondValue = DoubleExpr()
+                    if (secondValue.first) {
+                        if (recognizeTerminal(RPAREN) && firstVal.second != null && secondValue.second != null && recognizeTerminal(LCPAREN)) {
+                            if (firstVal.second == secondValue.second) {
+                                if (Operations(true) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && Operations(false) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            } else if (firstVal.second != secondValue.second) {
+                                if (Operations(false) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && Operations(true) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                } else if (recognizeTerminal(NOTEQUAL)) {
+                    var secondValue = DoubleExpr()
+                    if (secondValue.first) {
+                        if (recognizeTerminal(RPAREN) && firstVal.second != null && secondValue.second != null && recognizeTerminal(LCPAREN)) {
+                            if (firstVal.second != secondValue.second) {
+                                if (Operations(true) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && Operations(false) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            } else if (firstVal.second == secondValue.second) {
+                                if (Operations(false) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && Operations(true) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                } else if (recognizeTerminal(SMALLER)) {
+                    var secondValue = DoubleExpr()
+                    if (secondValue.first) {
+                        if (recognizeTerminal(RPAREN) && firstVal.second != null && secondValue.second != null && recognizeTerminal(LCPAREN)) {
+                            if (firstVal.second!! < secondValue.second!!) {
+                                if (Operations(true) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && Operations(false) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            } else {
+                                if (Operations(false) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && Operations(true) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                } else if (recognizeTerminal(BIGGER)) {
+                    var secondValue = DoubleExpr()
+                    if (secondValue.first) {
+                        if (recognizeTerminal(RPAREN) && firstVal.second != null && secondValue.second != null && recognizeTerminal(LCPAREN)) {
+                            if (firstVal.second!! > secondValue.second!!) {
+                                if (Operations(true) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && Operations(false) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            } else {
+                                if (Operations(false) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && Operations(true) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    fun Compare(): Boolean {
+        if (recognizeTerminal(EQUALS)) return true
+        else if (recognizeTerminal(BIGGER)) return true
+        else if (recognizeTerminal(SMALLER)) return true
+        else return (recognizeTerminal(NOTEQUAL))
+    }
+
+    // Streets ::= Street StreetPrime
+
+    fun Streets(): Boolean {
+        return Street() && StreetPrime()
+    }
+
+    // Street ::= street string { InsideOperations Bend InsideOperations Line }
+    fun Street(): Boolean {
+        if (recognizeTerminal(STREET)) {
+            if (last?.symbol == STRING) {
+                var name = last?.lexeme
+                name = name!!.substring(1, name.length - 1)
+                recognizeTerminal(STRING)
+                if (recognizeTerminal(LCPAREN) && InsideOperations(true)) {
+                    val bend = Bend()
+                    if (bend.first) {
+                        var coords = bend.second
+                        val angle = bend.third
+                        var bendCoordinates = generateGeoJSONCurve(Pair(coords!![0], coords!![1]), angle!!)
+                        val line = Line()
+                        if (line.first) {
+                            val firstLine = line.second
+                            val secondLine = line.third
+                            if (recognizeTerminal(RCPAREN)) {
+                                val markerFirstBendLine = MapRasterTiles.getPixelPosition(bendCoordinates?.get(0)!!.longtitude, bendCoordinates?.get(0)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                                val markerFirstLine = MapRasterTiles.getPixelPosition(firstLine!!.longtitude, firstLine!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                                val markerSecondLine = MapRasterTiles.getPixelPosition(secondLine!!.longtitude, secondLine!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+
+                                val thickness = 4f
+
+                                val dx1 = markerFirstLine.x - markerFirstBendLine.x
+                                val dy1 = markerFirstLine.y - markerFirstBendLine.y
+                                val len1 = Math.sqrt((dx1 * dx1 + dy1 * dy1).toDouble()).toFloat()
+                                val normX1 = dy1 / len1
+                                val normY1 = -dx1 / len1
+
+                                val corner1 = Vector2(markerFirstBendLine.x + thickness * normX1, markerFirstBendLine.y + thickness * normY1)
+                                val corner2 = Vector2(markerFirstBendLine.x - thickness * normX1, markerFirstBendLine.y - thickness * normY1)
+                                val corner3 = Vector2(markerFirstLine.x + thickness * normX1, markerFirstLine.y + thickness * normY1)
+                                val corner4 = Vector2(markerFirstLine.x - thickness * normX1, markerFirstLine.y - thickness * normY1)
+
+                                ctx.shapeRenderer.triangle(corner1.x, corner1.y, corner2.x, corner2.y, corner3.x, corner3.y)
+                                ctx.shapeRenderer.triangle(corner3.x, corner3.y, corner2.x, corner2.y, corner4.x, corner4.y)
+
+                                val dx2 = markerSecondLine.x - markerFirstLine.x
+                                val dy2 = markerSecondLine.y - markerFirstLine.y
+                                val len2 = Math.sqrt((dx2 * dx2 + dy2 * dy2).toDouble()).toFloat()
+                                val normX2 = dy2 / len2
+                                val normY2 = -dx2 / len2
+
+                                val corner5 = Vector2(markerFirstLine.x + thickness * normX2, markerFirstLine.y + thickness * normY2)
+                                val corner6 = Vector2(markerFirstLine.x - thickness * normX2, markerFirstLine.y - thickness * normY2)
+                                val corner7 = Vector2(markerSecondLine.x + thickness * normX2, markerSecondLine.y + thickness * normY2)
+                                val corner8 = Vector2(markerSecondLine.x - thickness * normX2, markerSecondLine.y - thickness * normY2)
+
+                                ctx.shapeRenderer.triangle(corner5.x, corner5.y, corner6.x, corner6.y, corner7.x, corner7.y)
+                                ctx.shapeRenderer.triangle(corner7.x, corner7.y, corner6.x, corner6.y, corner8.x, corner8.y)
+
+                                geoJSON += "\n\t{\n" +
+                                        "  \t\t\"type\": \"Feature\",\n" +
+                                        "  \t\t\"properties\": {\n" +
+                                        "\t\t\t\"element\": \"" + "Street" + "\",\n" +
+                                        "\t\t\t\"name\": \"" + name + "\"\n" +
+                                        "\t\t},\n" +
+                                        "  \t\t\"geometry\": {\n" +
+                                        "\t\t\t\"type\": \"LineString\",\n" +
+                                        "\t\t\t\"coordinates\": [\n" +
+                                        "        \t\t[" + (bendCoordinates?.get(0)!!.latitude) + ", " + (bendCoordinates?.get(0)!!.longtitude) + "],\n" +
+                                        "        \t\t[" + (bendCoordinates?.get(1)!!.latitude) + ", " + (bendCoordinates?.get(1)!!.longtitude) + "],\n" +
+                                        "        \t\t[" + (bendCoordinates?.get(2)!!.latitude) + ", " + (bendCoordinates?.get(2)!!.longtitude) + "],\n" +
+                                        "        \t\t[" + (firstLine!!.latitude) + ", " + (firstLine!!.longtitude) + "],\n" +
+                                        "        \t\t[" + (secondLine!!.latitude) + ", " + (secondLine!!.longtitude) + "]\n" +
+                                        "    \t  ]\n" +
+                                        "  \t\t}\n" +
+                                        "\t  },\n"
+                                insideVariableStringMap.clear()
+                                insideVariableDoubleMap.clear()
+                                insideVariableCoordPair.clear()
+                                return true
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+        return false
+    }
+
+    // SteeetPrime ::= Streets | e
+
+    fun StreetPrime(): Boolean {
+        if (Streets())
+            return true
+        else return true
+    }
+
+    // Institutions ::= Institution IntitutionPrime
+
+    fun Institutions(): Boolean {
+        return Institution() && InstitutionPrime()
+    }
+
+    // Institution ::= institution string { InsideOperations Address InsideOperations Events InsideOperations Block }
+
+    fun Institution(): Boolean {
+        if (recognizeTerminal(INSTITUTION)) {
+            if (last?.symbol == STRING) {
+                var name = last?.lexeme
+                name = name!!.substring(1, name.length -1)
+                recognizeTerminal(STRING)
+                if (recognizeTerminal(LCPAREN) && InsideOperations(true)) {
+                    var address = Address()
+                    if (address.first) {
+                        var ad = address.second
+                        ad = ad!!.substring(1, ad.length - 1)
+                        var events = Events()
+                        if (events.first) {
+                            var ev = events.second
+                            var block = Block()
+                            if (block.first) {
+                                var list = block.second
+                                if (recognizeTerminal(RCPAREN)) {
+
+                                    val markerFirstLine = MapRasterTiles.getPixelPosition(
+                                        list?.get(0)!!.longtitude,
+                                        list?.get(0)!!.latitude,
+                                        ctx.beginTile.x,
+                                        ctx.beginTile.y
+                                    )
+
+                                    val markerSecondLine = MapRasterTiles.getPixelPosition(
+                                        list?.get(1)!!.longtitude,
+                                        list?.get(1)!!.latitude,
+                                        ctx.beginTile.x,
+                                        ctx.beginTile.y
+                                    )
+
+                                    val markerThirdLine = MapRasterTiles.getPixelPosition(
+                                        list?.get(2)!!.longtitude,
+                                        list?.get(2)!!.latitude,
+                                        ctx.beginTile.x,
+                                        ctx.beginTile.y
+                                    )
+
+                                    val markerFourthLine = MapRasterTiles.getPixelPosition(
+                                        list?.get(3)!!.longtitude,
+                                        list?.get(3)!!.latitude,
+                                        ctx.beginTile.x,
+                                        ctx.beginTile.y
+                                    )
+
+                                    ctx.shapeRenderer.triangle(markerFirstLine.x, markerFirstLine.y, markerSecondLine.x, markerSecondLine.y, markerThirdLine.x, markerThirdLine.y)
+                                    ctx.shapeRenderer.triangle(markerFirstLine.x, markerFirstLine.y, markerFourthLine.x, markerFourthLine.y, markerThirdLine.x, markerThirdLine.y)
+
+                                    geoJSON += "\n\t{\n" +
+                                            "  \t\t\"type\": \"Feature\",\n" +
+                                            "  \t\t\"properties\": {\n" +
+                                            "\t\t\t\"element\": \"" + "Institution" + "\",\n" +
+                                            "\t\t\t\"name\": \"" + name + "\",\n" +
+                                            "\t\t\t\"address\": \"" + ad + "\",\n" +
+                                            "\t\t\t\"events\":" + ev + "\n" +
+                                            "\t\t},\n" +
+                                            "  \t\t\"geometry\": {\n" +
+                                            "\t\t\t\"type\": \"Polygon\",\n" +
+                                            "\t\t\t\"coordinates\": [\n" +
+                                            "      \t\t[\n" +
+                                            "        \t\t[" + (list?.get(0)!!.latitude) + ", " + (list?.get(0)!!.longtitude) + "],\n" +
+                                            "        \t\t[" + (list?.get(1)!!.latitude) + ", " + (list?.get(1)!!.longtitude) + "],\n" +
+                                            "        \t\t[" + (list?.get(2)!!.latitude) + ", " + (list?.get(2)!!.longtitude) + "],\n" +
+                                            "        \t\t[" + (list?.get(3)!!.latitude) + ", " + (list?.get(3)!!.longtitude) + "],\n" +
+                                            "        \t\t[" + (list?.get(0)!!.latitude) + ", " + (list?.get(0)!!.longtitude) + "]\n" +
+                                            "      \t\t]\n" +
+                                            "    \t  ]\n" +
+                                            "  \t\t}\n" +
+                                            "\t  },\n"
+                                    insideVariableStringMap.clear()
+                                    insideVariableDoubleMap.clear()
+                                    insideVariableCoordPair.clear()
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    // Institution' ::= Institutions | e
+
+    fun InstitutionPrime(): Boolean {
+        if (Institutions())
+            return true
+        else return true
+    }
+
+    // Squares ::= Square Squares | e
+
+    fun Squares(): Boolean {
+        if (Square() && Squares())
+            return true
+        else return true
+    }
+
+    // Square ::= square string { InsideOperations Block }
+    fun Square(): Boolean {
+        if (recognizeTerminal(SQUARE)) {
+            if (last?.symbol == STRING) {
+                var name = last?.lexeme
+                name = name!!.substring(1, name.length - 1)
+                recognizeTerminal(STRING)
+                if (recognizeTerminal(LCPAREN) && InsideOperations(true)) {
+                    var block = Block()
+                    if (block.first) {
+                        if (recognizeTerminal(RCPAREN)) {
+                            var list = block.second
+                            val markerFirstLine = MapRasterTiles.getPixelPosition(list?.get(0)!!.longtitude, list?.get(0)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerSecondLine = MapRasterTiles.getPixelPosition(list?.get(1)!!.longtitude, list?.get(1)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerThirdLine = MapRasterTiles.getPixelPosition(list?.get(2)!!.longtitude, list?.get(2)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerFourthLine = MapRasterTiles.getPixelPosition(list?.get(3)!!.longtitude, list?.get(3)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val vertices = floatArrayOf(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerSecondLine.x, markerSecondLine.y,
+                                markerThirdLine.x, markerThirdLine.y,
+                                markerFourthLine.x, markerFourthLine.y,
+                                markerFirstLine.x, markerFirstLine.y
+                            )
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerSecondLine.x, markerSecondLine.y,
+                                markerThirdLine.x, markerThirdLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerThirdLine.x, markerThirdLine.y,
+                                markerFourthLine.x, markerFourthLine.y
+                            )
+
+                            geoJSON += "\n\t{\n" +
+                                    "  \t\t\"type\": \"Feature\",\n" +
+                                    "  \t\t\"properties\": {\n" +
+                                    "\t\t\t\"element\": \"" + "Square" + "\",\n" +
+                                    "\t\t\t\"name\": \"" + name + "\"\n" +
+                                    "\t\t},\n" +
+                                    "  \t\t\"geometry\": {\n" +
+                                    "\t\t\t\"type\": \"Polygon\",\n" +
+                                    "\t\t\t\"coordinates\": [\n" +
+                                    "      \t\t[\n" +
+                                    "        \t\t[" + (list?.get(0)!!.latitude) + ", " + (list?.get(0)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (list?.get(1)!!.latitude) + ", " + (list?.get(1)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (list?.get(2)!!.latitude) + ", " + (list?.get(2)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (list?.get(3)!!.latitude) + ", " + (list?.get(3)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (list?.get(0)!!.latitude) + ", " + (list?.get(0)!!.longtitude) + "]\n" +
+                                    "      \t\t]\n" +
+                                    "    \t  ]\n" +
+                                    "  \t\t}\n" +
+                                    "\t  },\n"
+                            insideVariableStringMap.clear()
+                            insideVariableDoubleMap.clear()
+                            insideVariableCoordPair.clear()
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    // Statues ::= Statue Statues | e
+    fun Statues(): Boolean {
+        if (Statue() && Statues())
+            return true
+        else return true
+    }
+
+    // Statue ::= statue string { InsideOperations Point }
+    fun Statue(): Boolean {
+        if (recognizeTerminal(STATUE)) {
+            if (last?.symbol == STRING) {
+                var name = last?.lexeme
+                name = name!!.substring(1, name.length - 1)
+                recognizeTerminal(STRING)
+                if (recognizeTerminal(LCPAREN) && InsideOperations(true)) {
+                    var point = Point()
+                    if (point.first && recognizeTerminal(RCPAREN)) {
+                        val marker = MapRasterTiles.getPixelPosition(
+                            point.second!!.longtitude,
+                            point.second!!.latitude,
+                            ctx.beginTile.x,
+                            ctx.beginTile.y
+                        )
+
+                        ctx.shapeRenderer.circle(marker.x, marker.y, 5f)
+                        geoJSON += "\n\t{\n" +
+                                "  \t\t\"type\": \"Feature\",\n" +
+                                "  \t\t\"properties\": {\n" +
+                                "\t\t\t\"element\": \"" + "Statue" + "\",\n" +
+                                "\t\t\t\"name\": \"" + name + "\"\n" +
+                                "\t\t},\n" +
+                                "  \t\t\"geometry\": {\n" +
+                                "\t\t\t\"type\": \"Point\",\n" +
+                                "\t\t\t\"coordinates\": [" + (point.second!!.latitude) + ", " + (point.second!!.longtitude) + "]\n" +
+                                "  \t\t}\n" +
+                                "\t  },\n"
+                        insideVariableStringMap.clear()
+                        insideVariableDoubleMap.clear()
+                        insideVariableCoordPair.clear()
+                        return true
+                    }
+                }
+            }
+
+            /*&& recognizeTerminal(STRING) && recognizeTerminal(LCPAREN) && InsideOperations(true) && Point() && recognizeTerminal(RCPAREN)) {
+            insideVariableStringMap.clear()
+            insideVariableDoubleMap.clear()
+            insideVariableCoordPair.clear()
+            return true */
+        }
+        return false
+    }
+
+    // Lakes ::= Lake Lakes | e
+    fun Lakes(): Boolean {
+        if (Lake() && Lakes())
+            return true
+        else return true
+    }
+
+    // Lake ::= lake string { InsideOperations Circle }
+    fun Lake(): Boolean {
+        if (recognizeTerminal(LAKE)) {
+            if (last?.symbol == STRING) {
+                var name = last?.lexeme
+                name = name!!.substring(1, name.length -1)
+                recognizeTerminal(STRING)
+                if (recognizeTerminal(LCPAREN) && InsideOperations(true)) {
+                    var circle = Circle()
+                    if (circle.first) {
+                        var coords = generateCirclePolygon(circle.second!!, circle.third!!, 20)
+                        if (recognizeTerminal(RCPAREN)) {
+                            val markerFirstLine = MapRasterTiles.getPixelPosition(coords?.get(0)!!.longtitude, coords?.get(0)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerSecondLine = MapRasterTiles.getPixelPosition(coords?.get(1)!!.longtitude, coords?.get(1)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerThirdLine = MapRasterTiles.getPixelPosition(coords?.get(2)!!.longtitude, coords?.get(2)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerFourthLine = MapRasterTiles.getPixelPosition(coords?.get(3)!!.longtitude, coords?.get(3)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerFifthLine = MapRasterTiles.getPixelPosition(coords?.get(4)!!.longtitude, coords?.get(4)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerSixthLine = MapRasterTiles.getPixelPosition(coords?.get(5)!!.longtitude, coords?.get(5)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerSeventhLine = MapRasterTiles.getPixelPosition(coords?.get(6)!!.longtitude, coords?.get(6)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerEighthLine = MapRasterTiles.getPixelPosition(coords?.get(7)!!.longtitude, coords?.get(7)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerNinethLine = MapRasterTiles.getPixelPosition(coords?.get(8)!!.longtitude, coords?.get(8)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val markerTenthLine = MapRasterTiles.getPixelPosition(coords?.get(9)!!.longtitude, coords?.get(9)!!.latitude, ctx.beginTile.x, ctx.beginTile.y)
+                            val vertices = floatArrayOf(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerSecondLine.x, markerSecondLine.y,
+                                markerThirdLine.x, markerThirdLine.y,
+                                markerFourthLine.x, markerFourthLine.y,
+                                markerFifthLine.x, markerFifthLine.y,
+                                markerSixthLine.x, markerSixthLine.y,
+                                markerSeventhLine.x, markerSeventhLine.y,
+                                markerEighthLine.x, markerEighthLine.y,
+                                markerNinethLine.x, markerNinethLine.y,
+                                markerTenthLine.x, markerTenthLine.y,
+                                markerFirstLine.x, markerFirstLine.y
+                            )
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerSecondLine.x, markerSecondLine.y,
+                                markerThirdLine.x, markerThirdLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerThirdLine.x, markerThirdLine.y,
+                                markerFourthLine.x, markerFourthLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerFourthLine.x, markerFourthLine.y,
+                                markerFifthLine.x, markerFifthLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerFifthLine.x, markerFifthLine.y,
+                                markerSixthLine.x, markerSixthLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerSixthLine.x, markerSixthLine.y,
+                                markerSeventhLine.x, markerSeventhLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerSeventhLine.x, markerSeventhLine.y,
+                                markerEighthLine.x, markerEighthLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerEighthLine.x, markerEighthLine.y,
+                                markerNinethLine.x, markerNinethLine.y
+                            )
+
+                            ctx.shapeRenderer.triangle(
+                                markerFirstLine.x, markerFirstLine.y,
+                                markerNinethLine.x, markerNinethLine.y,
+                                markerTenthLine.x, markerTenthLine.y
+                            )
+
+                            geoJSON += "\n\t{\n" +
+                                    "  \t\t\"type\": \"Feature\",\n" +
+                                    "  \t\t\"properties\": {\n" +
+                                    "\t\t\t\"element\": \"" + "Lake" + "\",\n" +
+                                    "\t\t\t\"name\": \"" + name + "\"\n" +
+                                    "\t\t},\n" +
+                                    "  \t\t\"geometry\": {\n" +
+                                    "\t\t\t\"type\": \"Polygon\",\n" +
+                                    "\t\t\t\"coordinates\": [\n" +
+                                    "      \t\t[\n" +
+                                    "        \t\t[" + (coords?.get(0)!!.latitude) + ", " + (coords?.get(0)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (coords?.get(1)!!.latitude) + ", " + (coords?.get(1)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (coords?.get(2)!!.latitude) + ", " + (coords?.get(2)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (coords?.get(3)!!.latitude) + ", " + (coords?.get(3)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (coords?.get(4)!!.latitude) + ", " + (coords?.get(4)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (coords?.get(5)!!.latitude) + ", " + (coords?.get(5)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (coords?.get(6)!!.latitude) + ", " + (coords?.get(6)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (coords?.get(7)!!.latitude) + ", " + (coords?.get(7)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (coords?.get(8)!!.latitude) + ", " + (coords?.get(8)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (coords?.get(9)!!.latitude) + ", " + (coords?.get(9)!!.longtitude) + "],\n" +
+                                    "        \t\t[" + (coords?.get(0)!!.latitude) + ", " + (coords?.get(0)!!.longtitude) + "]\n" +
+                                    "      \t\t]\n" +
+                                    "    \t  ]\n" +
+                                    "  \t\t}\n" +
+                                    "\t  },\n"
+                            insideVariableStringMap.clear()
+                            insideVariableDoubleMap.clear()
+                            insideVariableCoordPair.clear()
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    // Point ::= point Coordinate
+
+    fun Point(): Pair<Boolean,Coordinate?> {
+        if (recognizeTerminal(POINT)) {
+            var coordinate = Coordinate()
+            var cord = Coordinate("point", coordinate.second!!, coordinate.third!!)
+            return Pair(coordinate.first, cord)
+        }
+        return Pair(false, null)
+    }
+
+    // Block ::= block ( Coordinate , Coordinate , Coordinate , Coordinate )
+    fun Block(): Pair<Boolean, MutableList<Coordinate>?> {
+        if (recognizeTerminal(BLOCK) && recognizeTerminal(LPAREN)) {
+            var blockCoord: MutableList<Coordinate> = mutableListOf()
+            var c1 = Coordinate()
+            if (c1.first) {
+                var newCoord = Coordinate("first", c1.second!!, c1.third!!)
+                blockCoord.add(newCoord)
+                if (recognizeTerminal(COMMA)) {
+                    var c2 = Coordinate()
+                    if (c2.first) {
+                        newCoord = Coordinate("second", c2.second!!, c2.third!!)
+                        blockCoord.add(newCoord)
+                        if (recognizeTerminal(COMMA)) {
+                            var c3 = Coordinate()
+                            if (c3.first) {
+                                newCoord = Coordinate("third", c3.second!!, c3.third!!)
+                                blockCoord.add(newCoord)
+                                if (recognizeTerminal(COMMA)) {
+                                    var c4 = Coordinate()
+                                    if (c4.first) {
+                                        newCoord = Coordinate("four", c4.second!!, c4.third!!)
+                                        blockCoord.add(newCoord)
+                                        if (recognizeTerminal(RPAREN))
+                                            return Pair(true, blockCoord)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return Pair(false, null)
+    }
+
+    // Bend ::= bend ( Coordinate , Coordinate, Angle )
+    fun Bend(): Triple<Boolean, MutableList<Coordinate>?, Double?> {
+        if (recognizeTerminal(BEND) && recognizeTerminal(LPAREN)) {
+            var bendCoord: MutableList<Coordinate> = mutableListOf()
+            var first = Coordinate()
+            if (first.first) {
+                var newCoord = Coordinate("bendFirst", first.second!!, first.third!!)
+                bendCoord.add(newCoord)
+                if (recognizeTerminal(COMMA)) {
+                    var second = Coordinate()
+                    if (second.first) {
+                        newCoord = Coordinate("bendSecond", second.second!!, second.third!!)
+                        bendCoord.add(newCoord)
+                        if (recognizeTerminal(COMMA) && ((last?.symbol == INT) || (last?.symbol == DOUBLE) || (last?.symbol == VAR))) {
+                            val an = Angle()
+                            if (an.first) {
+                                val angle = an.second
+                                if (recognizeTerminal(RPAREN)) {
+                                    return Triple(true, bendCoord, angle)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return Triple(false, null, null)
+    }
+
+    // Line ::= ( Coordinate , Coordinate )
+    fun Line(): Triple<Boolean, Coordinate?, Coordinate?> {
+        if (recognizeTerminal(LINE) && recognizeTerminal(LPAREN)) {
+            var first = Coordinate()
+            if (first.first) {
+                val fCoord = Coordinate("first", first.second!!, first.third!!)
+                if (recognizeTerminal(COMMA)) {
+                    val second = Coordinate()
+                    if (second.first) {
+                        val sCoord = Coordinate("second", second.second!!, second.third!!)
+                        if (recognizeTerminal(RPAREN)) {
+                            return Triple(true, fCoord, sCoord)
+                        }
+                    }
+                }
+            }
+        }
+        return Triple(false, null, null)
+    }
+
+    // Circle ::= circle ( Coordinate, IntExpr )
+    fun Circle(): Triple<Boolean, Coordinate?, Double?> {
+        if (recognizeTerminal(CIRCLE) && recognizeTerminal(LPAREN)) {
+            var coord = Coordinate()
+            if (coord.first) {
+                val coordinate = Coordinate("center", coord.second!!, coord.third!!)
+                if (recognizeTerminal(COMMA) && ((last?.symbol == INT) || (last?.symbol == VAR) || (last?.symbol == DOUBLE))) {
+                    var double = DoubleExpr()
+                    if (double.first && recognizeTerminal(RPAREN)) {
+                        return Triple(true, coordinate, double.second)
+                    }
+                }
+            }
+        }
+        return Triple(false, null, null)
+    }
+
+    // Coordinate ::= ( Coordinate' | var
+    // Coordinate' ::= IntExpr , Coordinate'' )
+    // Coordinate'' ::= IntExpr | First | Second
+
+    fun Coordinate(): Triple<Boolean, Double?, Double?> {
+        if (recognizeTerminal(LPAREN)) {
+            var expr = DoubleExpr()
+            var f = First()
+            var s = Second()
+            if (expr.first) {
+                var firstCoord = expr.second
+                if(recognizeTerminal(COMMA)) {
+                    var secExpr = DoubleExpr()
+                    var first = First()
+                    var second = Second()
+                    if (firstCoord != null) {
+                        if (secExpr.first) {
+                            var secondCoord = secExpr.second
+                            if (recognizeTerminal(RPAREN)) {
+                                if ((secondCoord != null))
+                                    return Triple(true, firstCoord, secondCoord)
+                            }
+                        } else if (first != null) {
+                            if (recognizeTerminal(RPAREN))
+                                return Triple(true, firstCoord, first)
+                        } else if (second != null) {
+                            if (recognizeTerminal(RPAREN))
+                                return Triple(true, firstCoord, second)
+                        }
+                    }
+                }
+            } else if (f != null) {
+                if (recognizeTerminal(COMMA)) {
+                    var expression = DoubleExpr()
+                    var fst = First()
+                    var snd = Second()
+                    if (expression.first) {
+                        if (recognizeTerminal(RPAREN)) {
+                            if (expression.second != null) {
+                                return Triple(true, f, expression.second)
+                            }
+                        }
+                    } else if (fst != null) {
+                        if (recognizeTerminal(RPAREN))
+                            return Triple(true, f, fst)
+                    } else if (snd != null) {
+                        if (recognizeTerminal(RPAREN))
+                            return Triple(true, f, snd)
+                    }
+                }
+            } else if (s != null) {
+                if (recognizeTerminal(COMMA)) {
+                    var expression = DoubleExpr()
+                    var fst = First()
+                    var snd = Second()
+                    if (expression.first) {
+                        if (recognizeTerminal(RPAREN)) {
+                            if (expression.second != null) {
+                                return Triple(true, s, expression.second)
+                            }
+                        }
+                    } else if (fst != null) {
+                        if (recognizeTerminal(RPAREN))
+                            return Triple(true, s, fst)
+                    } else if (snd != null) {
+                        if (recognizeTerminal(RPAREN))
+                            return Triple(true, s, snd)
+                    }
+                }
+            }
+        } else if (last?.symbol == VAR) {
+            val stringValue = last?.lexeme
+            recognizeTerminal(VAR)
+            var coord = insideVariableCoordPair.find { it.name == stringValue }
+            if (coord != null) {
+                return Triple(true, coord.longtitude, coord.longtitude)
+            }
+            coord = variableCoordPair.find { it.name == stringValue }
+            if (coord != null) {
+                return Triple(true, coord.longtitude, coord.longtitude)
+            }
+        }
+        return Triple(false, null, null)
+    }
+
+    // AssignString ::= dec_string var = AssignString'
+    // AssignString' ::= string | var
+    fun AssignString(status: Boolean): Boolean {
+        if (recognizeTerminal(DEC_STRING) && last?.symbol == VAR) {
+            val variableName = last?.lexeme
+            recognizeTerminal(VAR)
+            if (recognizeTerminal(ASSIGN) && (last?.symbol == STRING || last?.symbol == VAR)) {
+                val stringValue = last?.lexeme
+                recognizeTerminal(STRING)
+                if (!status) return true
+                val cleanedStringValue = stringValue?.removeSurrounding("\"")
+
+                if (variableName != null && cleanedStringValue != null) {
+                    variableStringMap[variableName] = cleanedStringValue
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    //AssignInt ::= dec_int var = AssignInt'
+    //AssignInt' ::= int | var |
+
+    fun AssignInt(status: Boolean): Boolean {
+        if (recognizeTerminal(DEC_INT) && last?.symbol == VAR) {
+            val variableName = last?.lexeme
+            recognizeTerminal(VAR)
+            if (recognizeTerminal(ASSIGN) && (last?.symbol == INT || last?.symbol == VAR)) {
+                val intValue =  DoubleExpr().second
+                if (!status) return true
+                if (variableName != null && intValue != null) {
+                    variableIntMap[variableName] = intValue.toInt()
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    // AssignCoord ::= dec_coord var = AssignCoord'
+    // AssignCoord' ::= Coordinate | var
+
+    fun AssignCoord(status: Boolean): Boolean {
+        if (recognizeTerminal(DEC_COORD) && last?.symbol == VAR) {
+            val variableName = last?.lexeme
+            recognizeTerminal(VAR)
+            if (recognizeTerminal(ASSIGN) && recognizeTerminal(LPAREN) && (last?.symbol == INT || last?.symbol == VAR)) {
+                val leftIntValue =  DoubleExpr().second
+                if(recognizeTerminal(COMMA)) {
+                    val rightIntValue =  DoubleExpr().second
+                    if (variableName != null && leftIntValue != null && rightIntValue != null) {
+                        val newCoord = Coordinate(variableName, leftIntValue, rightIntValue)
+                        if (recognizeTerminal(RPAREN)) {
+                            if (!status) return true
+                            variableCoordPair.add(newCoord)
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    //AssignDouble ::= dec_double var = AssignDouble'
+    //AssignDouble' ::= double | var
+
+    fun AssignDouble(status: Boolean): Boolean {
+        if (recognizeTerminal(DEC_DOUBLE) && last?.symbol == VAR) {
+            val variableName = last?.lexeme
+            recognizeTerminal(VAR)
+            if (recognizeTerminal(ASSIGN) && (last?.symbol == DOUBLE || last?.symbol == VAR)) {
+                val intValue =  DoubleExpr().second
+                if (!status) return true
+                if (variableName != null && intValue != null) {
+                    variableDoubleMap[variableName] = intValue
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    // InsideAssignString ::= dec_string var = InsideAssignString'
+    // InsideAssignString' ::= string | var
+
+    fun InsideAssignString(status: Boolean): Boolean {
+        if (recognizeTerminal(DEC_STRING) && last?.symbol == VAR) {
+            val variableName = last?.lexeme
+            recognizeTerminal(VAR)
+            if (recognizeTerminal(ASSIGN) && (last?.symbol == STRING || last?.symbol == VAR)) {
+                val stringValue = last?.lexeme
+                recognizeTerminal(STRING)
+                if (!status) return true
+                val cleanedStringValue = stringValue?.removeSurrounding("\"")
+
+                if (variableName != null && cleanedStringValue != null) {
+                    insideVariableStringMap[variableName] = cleanedStringValue
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    // InsideAssignInt ::= dec_int var = InsideAssignInt'
+    // InsideAssignInt' ::= int | var
+
+    fun InsideAssignInt(status: Boolean): Boolean {
+        if (recognizeTerminal(DEC_INT) && last?.symbol == VAR) {
+            val variableName = last?.lexeme
+            recognizeTerminal(VAR)
+            if (recognizeTerminal(ASSIGN) && (last?.symbol == INT || last?.symbol == VAR)) {
+                val intValue =  DoubleExpr().second
+                if (!status) return true
+                if (variableName != null && intValue != null) {
+                    insideVariableIntMap[variableName] = intValue.toInt()
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    // InsideAssignCoord ::= dec_coord var = InsideAssignCoord'
+    // InsideAssignCoord' ::= Coordinate | var
+
+    fun InsideAssignCoord(status: Boolean): Boolean {
+        if (recognizeTerminal(DEC_COORD) && last?.symbol == VAR) {
+            val variableName = last?.lexeme
+            recognizeTerminal(VAR)
+            if (recognizeTerminal(ASSIGN) && recognizeTerminal(LPAREN) && (last?.symbol == INT || last?.symbol == VAR)) {
+                val leftIntValue =  DoubleExpr().second
+                if(recognizeTerminal(COMMA)) {
+                    val rightIntValue =  DoubleExpr().second
+                    if (variableName != null && leftIntValue != null && rightIntValue != null) {
+                        val newCoord = Coordinate(variableName, leftIntValue, rightIntValue)
+                        if (recognizeTerminal(RPAREN)) {
+                            if (!status) return true
+                            insideVariableCoordPair.add(newCoord)
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    fun InsideAssignDouble(status: Boolean): Boolean {
+        if (recognizeTerminal(DEC_DOUBLE) && last?.symbol == VAR) {
+            val variableName = last?.lexeme
+            recognizeTerminal(VAR)
+            if (recognizeTerminal(ASSIGN) && (last?.symbol == DOUBLE || last?.symbol == VAR)) {
+                val intValue =  DoubleExpr().second
+                if (!status) return true
+                if (variableName != null && intValue != null) {
+                    insideVariableDoubleMap[variableName] = intValue
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    fun InsideIfElse(status: Boolean): Boolean {
+        if (recognizeTerminal(IF) && recognizeTerminal(LPAREN)) {
+            var firstVal = DoubleExpr()
+            if (firstVal.first) {
+                if (recognizeTerminal(EQUALS)) {
+                    var secondValue = DoubleExpr()
+                    if (secondValue.first) {
+                        if (recognizeTerminal(RPAREN) && firstVal.second != null && secondValue.second != null && recognizeTerminal(LCPAREN)) {
+                            if (firstVal.second == secondValue.second) {
+                                if (InsideOperations(true) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && InsideOperations(false) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            } else if (firstVal.second != secondValue.second) {
+                                if (InsideOperations(false) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && InsideOperations(true) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                } else if (recognizeTerminal(NOTEQUAL)) {
+                    var secondValue = DoubleExpr()
+                    if (secondValue.first) {
+                        if (recognizeTerminal(RPAREN) && firstVal.second != null && secondValue.second != null && recognizeTerminal(LCPAREN)) {
+                            if (firstVal.second != secondValue.second) {
+                                if (InsideOperations(true) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && InsideOperations(false) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            } else if (firstVal.second == secondValue.second) {
+                                if (InsideOperations(false) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && InsideOperations(true) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                } else if (recognizeTerminal(SMALLER)) {
+                    var secondValue = DoubleExpr()
+                    if (secondValue.first) {
+                        if (recognizeTerminal(RPAREN) && firstVal.second != null && secondValue.second != null && recognizeTerminal(LCPAREN)) {
+                            if (firstVal.second!! < secondValue.second!!) {
+                                if (InsideOperations(true) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && InsideOperations(false) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            } else {
+                                if (InsideOperations(false) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && InsideOperations(true) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                } else if (recognizeTerminal(BIGGER)) {
+                    var secondValue = DoubleExpr()
+                    if (secondValue.first) {
+                        if (recognizeTerminal(RPAREN) && firstVal.second != null && secondValue.second != null && recognizeTerminal(LCPAREN)) {
+                            if (firstVal.second!! > secondValue.second!!) {
+                                if (InsideOperations(true) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && InsideOperations(false) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            } else {
+                                if (InsideOperations(false) && recognizeTerminal(RCPAREN)) {
+                                    if (!status) return true
+                                    if (recognizeTerminal(ELSE) && recognizeTerminal(LCPAREN) && InsideOperations(true) && recognizeTerminal(
+                                            RCPAREN))
+                                        return true
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    // Angle ::= DoubleExpr | var
+
+    private fun Angle(): Pair<Boolean, Double?> {
+        var double = DoubleExpr()
+        if (double.first) {
+            return Pair(true, double.second)
+        } else if (last?.symbol == VAR) {
+            val stringValue = last?.lexeme
+            recognizeTerminal(VAR)
+            var value = variableDoubleMap[stringValue]
+            return Pair(variableDoubleMap.keys.find { it == stringValue } != null, value)
+        }
+        return Pair(false, null)
+    }
+
+    // Address ::= address = Address'
+    // Address' ::= string | var
+
+    private fun Address(): Pair<Boolean, String?> {
+        if (recognizeTerminal(ADDRESS) && recognizeTerminal(ASSIGN)) {
+            if (last?.symbol == STRING) {
+                var string = last?.lexeme
+                recognizeTerminal(STRING)
+                return Pair(true, string)
+            } else if (last?.symbol == VAR) {
+                val stringValue = last?.lexeme
+                recognizeTerminal(VAR)
+                var foundValue = insideVariableStringMap.keys.find { it == stringValue }
+                if (foundValue == null) {
+                    foundValue = variableStringMap.keys.find { it == stringValue }
+                }
+                return Pair(foundValue != null, foundValue)
+            }
+        }
+        return Pair(false, null)
+    }
+
+    // Events ::= events = Events'
+    // Events' ::= IntExpr | var
+    private fun Events(): Pair<Boolean, Double?> {
+        if (recognizeTerminal(EVENTS) && recognizeTerminal(ASSIGN)) {
+            var expr = DoubleExpr()
+            if (expr.first) {
+                return Pair(true, expr.second)
+            } else if (last?.symbol == VAR) {
+                val stringValue = last?.lexeme
+                var value : Double? = null
+                recognizeTerminal(VAR)
+                var foundValue = insideVariableDoubleMap.keys.find { it == stringValue }
+                if (foundValue != null) value = insideVariableDoubleMap[foundValue]
+                if (foundValue == null) {
+                    foundValue = variableDoubleMap.keys.find { it == stringValue }
+                    value = variableDoubleMap[foundValue]
+                }
+                return Pair(foundValue != null, value)
+            }
+        }
+        return Pair(false, null)
+    }
+
+    // First ::= fst(var)
+
+    private fun First(): Double? {
+        if(recognizeTerminal(FST) && recognizeTerminal(LPAREN)) {
+            if (last?.symbol == VAR) {
+                val stringValue = last?.lexeme
+                recognizeTerminal(VAR)
+                var foundValue = insideVariableCoordPair.find { it.name == stringValue }
+                if (foundValue == null) {
+                    foundValue = variableCoordPair.find { it.name == stringValue }
+                    recognizeTerminal(RPAREN)
+                }
+                if (foundValue != null)
+                    return foundValue.longtitude
+                else return null
+            }
+            return null
+        }
+        return null
+    }
+
+    // Second ::= snd(var)
+    private fun Second(): Double? {
+        if(recognizeTerminal(SND) && recognizeTerminal(LPAREN)) {
+            if (last?.symbol == VAR) {
+                val stringValue = last?.lexeme
+                recognizeTerminal(VAR)
+                var foundValue = insideVariableCoordPair.find { it.name == stringValue }
+                if (foundValue == null) {
+                    foundValue = variableCoordPair.find { it.name == stringValue }
+                    recognizeTerminal(RPAREN)
+                }
+                if (foundValue != null)
+                    return foundValue.longtitude
+                else return null
+            }
+            return null
+        }
+        return null
+    }
+
+    fun generateCirclePolygon(center: Coordinate, radius: Double, numPoints: Int): List<Coordinate> {
+        val coordinates = mutableListOf<Coordinate>()
+        val angleIncrement = 4 * PI / numPoints
+
+        for (i in 0 until numPoints) {
+            val angle = i * angleIncrement
+            val x = center.longtitude + radius * cos(angle)
+            val y = center.latitude + radius * sin(angle)
+            coordinates.add(Coordinate("coord", x, y))
+        }
+
+        return coordinates
+    }
+
+    fun generateGeoJSONCurve(coords: Pair<Coordinate, Coordinate>, angle: Double): List<Coordinate> {
+        val start = coords.first
+        val end = coords.second
+
+        val angleRad = angle * PI / 180.0
+
+        val distance = Math.hypot(end.longtitude - start.longtitude, end.latitude - start.latitude)
+
+        val midX = (start.longtitude + end.longtitude) / 2.0
+        val midY = (start.latitude + end.latitude) / 2.0
+
+        val offset = distance * 0.1
+
+        val control1X = midX + offset * cos(angleRad)
+        val control1Y = midY + offset * sin(angleRad)
+
+        val coordinates = mutableListOf<Coordinate>()
+        coordinates.add(start)
+        coordinates.add(Coordinate("coord", control1X, control1Y))
+        coordinates.add(Coordinate("coord", control1X, control1Y))
+
+        return coordinates
+    }
+    fun translateGeoJsonFromFile(filePath: String): String {
+        val fileContent = File(filePath).readText()
+        return translateGeoJson(fileContent)
+    }
+    fun translateGeoJson(input: String): String {
+        var output = "city \"Maribor City 123\" {\n\n"
+        val json = JSONObject(input)
+        val features = json.getJSONArray("features")
+        for (i in 0 until features.length()) {
+            val feature = features.getJSONObject(i)
+            val element = feature.getJSONObject("properties").getString("element")
+            val name = feature.getJSONObject("properties").getString("name")
+            output += "    $element \"$name\" {\n"
+            if (element == "Institution") {
+                val address = feature.getJSONObject("properties").getString("address")
+                val events = feature.getJSONObject("properties").getDouble("events")
+                output += "        address = \"$address\"\n"
+                output += "        events = $events\n"
+            }
+            val geometryType = feature.getJSONObject("geometry").getString("type")
+            val coordinates = feature.getJSONObject("geometry").getJSONArray("coordinates")
+            when (geometryType) {
+                "LineString" -> {
+                    output += "        bend(${formatCoordinates(coordinates.getJSONArray(0))}, ${formatCoordinates(coordinates.getJSONArray(1))}, 1)\n"
+                    output += "        line(${formatCoordinates(coordinates.getJSONArray(1))}, ${formatCoordinates(coordinates.getJSONArray(2))})\n"
+                }
+                "Polygon" -> {
+                    output += "        block(${formatCoordinates(coordinates.getJSONArray(0))})\n"
+                }
+                "Point" -> {
+                    output += "        point(${formatCoordinates(coordinates)})\n"
+                }
+                // Assume "Lake" is a circle
+                else -> {
+                    val center = coordinates.getJSONArray(0).getJSONArray(0)
+                    output += "        circle(${formatCoordinates(center)}, 0.0005)\n"
+                }
+            }
+            output += "    }\n\n"
+        }
+        output += "}\n"
+        return output
+    }
+
+    fun formatCoordinates(coordinates: JSONArray): String {
+        val coords = coordinates.joinToString(", ") { formatCoordinate(it) }
+        return "($coords)"
+    }
+
+    fun formatCoordinate(coordinate: Any): String {
+        return coordinate.toString()
+    }
+
+    private fun recognizeTerminal(value: Int) =
+        if (last?.symbol == value) {
+            last = scanner.getToken()
+            true
+        } else false
+
 }
 
-class Final: Block {
-    override fun evalPartial(env: Map<String, Expr>): Block =
-        this
-
-    override fun toGeoJSON(): List<JSONObject> = emptyList()
-
-    // RRI
-    override fun render(ctx: Context) {}
-}
-
-class City(private val block: Block) {
-
-    fun evalPartial(env: Map<String, Expr>): City =
-        City(block.evalPartial(env))
-
-    fun toGeoJSON(): JSONObject =
-        JSONObject()
-            .put("type", "FeatureCollection")
-            .put("features", JSONArray(block.toGeoJSON()))
-
-    // RRI
-    fun render(ctx: Context): Unit =
-        block.render(ctx)
-}
-
-fun load(stream: InputStream) =
-    Parser(Scanner(AUTOMATON, stream)).parse().evalPartial(emptyMap())
-
-// RRI
-class Renderer {
-    fun render(stream: InputStream, ctx: Context) =
-        load(stream).render(ctx)
-}
-
-fun main() {
-    println(load(File("program.txt").inputStream()).toGeoJSON().toString(2))
+fun run(ctx: Context) {
+    Parser(Scanner(ForForeachFFFAutomaton, File("test.txt").inputStream()), ctx).parse()
 }

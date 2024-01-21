@@ -1,0 +1,216 @@
+
+gameplay.png
+size: 1024, 1024
+format: RGBA8888
+filter: Nearest, Nearest
+repeat: none
+dancing_man_2
+  rotate: false
+  xy: 385, 6
+  size: 53, 100
+  orig: 53, 100
+  offset: 0, 0
+  index: 2
+dancing_man_1
+  rotate: false
+  xy: 542, 6
+  size: 46, 100
+  orig: 46, 100
+  offset: 0, 0
+  index: 1
+dancing_man2_2
+  rotate: false
+  xy: 856, 842
+  size: 67, 110
+  orig: 67, 110
+  offset: 0, 0
+  index: 2
+dancing_man2_1
+  rotate: false
+  xy: 948, 740
+  size: 42, 110
+  orig: 42, 110
+  offset: 0, 0
+  index: 1
+dancing_man3_2
+  rotate: false
+  xy: 838, 36
+  size: 51, 110
+  orig: 51, 110
+  offset: 0, 0
+  index: 2
+dancing_man3_1
+  rotate: false
+  xy: 891, 34
+  size: 45, 112
+  orig: 45, 112
+  offset: 0, 0
+  index: 1
+dancing_pair_1
+  rotate: false
+  xy: 204, 58
+  size: 76, 100
+  orig: 76, 100
+  offset: 0, 0
+  index: 1
+dancing_pair_2
+  rotate: false
+  xy: 324, 6
+  size: 59, 100
+  orig: 59, 100
+  offset: 0, 0
+  index: 2
+dancing_pair_3
+  rotate: false
+  xy: 492, 6
+  size: 48, 100
+  orig: 48, 100
+  offset: 0, 0
+  index: 3
+dancing_woman_3
+  rotate: false
+  xy: 925, 852
+  size: 60, 100
+  orig: 60, 100
+  offset: 0, 0
+  index: 3
+dancing_woman_4
+  rotate: false
+  xy: 440, 6
+  size: 50, 100
+  orig: 50, 100
+  offset: 0, 0
+  index: 4
+dancing_woman_2
+  rotate: false
+  xy: 590, 6
+  size: 46, 100
+  orig: 46, 100
+  offset: 0, 0
+  index: 2
+dancing_woman_1
+  rotate: false
+  xy: 948, 536
+  size: 45, 100
+  orig: 45, 100
+  offset: 0, 0
+  index: 1
+dancing_woman_5
+  rotate: false
+  xy: 948, 434
+  size: 46, 100
+  orig: 46, 100
+  offset: 0, 0
+  index: 5
+dancing_woman2_2
+  rotate: false
+  xy: 987, 852
+  size: 30, 100
+  orig: 30, 100
+  offset: 0, 0
+  index: 2
+dancing_woman2_3
+  rotate: false
+  xy: 948, 638
+  size: 42, 100
+  orig: 42, 100
+  offset: 0, 0
+  index: 3
+dancing_woman2_1
+  rotate: false
+  xy: 948, 332
+  size: 38, 100
+  orig: 38, 100
+  offset: 0, 0
+  index: 1
+dancing_woman3_1
+  rotate: false
+  xy: 282, 34
+  size: 40, 124
+  orig: 40, 124
+  offset: 0, 0
+  index: 1
+dancing_woman3_2
+  rotate: false
+  xy: 938, 33
+  size: 41, 113
+  orig: 41, 113
+  offset: 0, 0
+  index: 2
+discoBall
+  rotate: false
+  xy: 2, 482
+  size: 320, 320
+  orig: 320, 320
+  offset: 0, 0
+  index: -1
+dvoranaTabor
+  rotate: false
+  xy: 2, 804
+  size: 500, 200
+  orig: 500, 200
+  offset: 0, 0
+  index: -1
+institution
+  rotate: false
+  xy: 2, 160
+  size: 320, 320
+  orig: 320, 320
+  offset: 0, 0
+  index: -1
+lent
+  rotate: false
+  xy: 504, 954
+  size: 500, 50
+  orig: 500, 50
+  offset: 0, 0
+  index: -1
+lutkovnoGledalisceMaribor
+  rotate: false
+  xy: 504, 752
+  size: 350, 200
+  orig: 350, 200
+  offset: 0, 0
+  index: -1
+masks
+  rotate: false
+  xy: 324, 430
+  size: 320, 320
+  orig: 320, 320
+  offset: 0, 0
+  index: -1
+microphone
+  rotate: false
+  xy: 324, 108
+  size: 320, 320
+  orig: 320, 320
+  offset: 0, 0
+  index: -1
+minoriti
+  rotate: false
+  xy: 646, 450
+  size: 300, 300
+  orig: 300, 300
+  offset: 0, 0
+  index: -1
+narodniDomMaribor
+  rotate: false
+  xy: 646, 148
+  size: 300, 300
+  orig: 300, 300
+  offset: 0, 0
+  index: -1
+sng
+  rotate: false
+  xy: 646, 2
+  size: 190, 144
+  orig: 190, 144
+  offset: 0, 0
+  index: -1
+stuk
+  rotate: false
+  xy: 2, 8
+  size: 200, 150
+  orig: 200, 150
+  offset: 0, 0
+  index: -1

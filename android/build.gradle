@@ -18,7 +18,8 @@ android {
     }
     defaultConfig {
         applicationId "com.mygdx.game"
-        minSdkVersion 14
+        minSdkVersion 16
+        multiDexEnabled = true
         targetSdkVersion 31
         versionCode 1
         versionName "1.0"
