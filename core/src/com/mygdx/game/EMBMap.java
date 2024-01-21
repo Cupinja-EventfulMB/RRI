@@ -49,6 +49,9 @@ import com.mygdx.game.assets.AssetDescriptors;
 import com.mygdx.game.assets.RegionNames;
 import com.mygdx.game.lang.Context;
 import com.mygdx.game.lang.LangKt;
+import com.mygdx.game.utils.Blockchain;
+import com.mygdx.game.utils.BlockchainData;
+import com.mygdx.game.utils.BlockchainRequest;
 import com.mygdx.game.utils.Config;
 import com.mygdx.game.utils.Constants;
 import com.mygdx.game.utils.DancingCharacter;
@@ -64,6 +67,19 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Random;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import com.badlogic.gdx.utils.Json;
+import com.badlogic.gdx.utils.JsonWriter;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.utils.Json;
+import com.badlogic.gdx.utils.JsonValue;
+
 
 public class EMBMap extends ApplicationAdapter implements GestureDetector.GestureListener {
     private MongoDBManager mongoDBManager;
@@ -120,8 +136,8 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
     private TextButton musicButton;
     private Music currentMusic;
     private BitmapFont font;
-
-
+    private Blockchain blockchain;
+    private boolean showBlockchainDots = false;
 
     private void loadTexturesAndSkin() {
         markerInstitutionTextures = new Array<>();
@@ -256,7 +272,8 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
         //animation
         dancingCharacters = new ArrayList<>();
-
+        blockchain = new Blockchain();
+        displayBlockchain();
     }
 
     @Override
@@ -271,6 +288,9 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         tiledMapRenderer.render();
 
         drawMarkers(spriteBatch);
+        if (showBlockchainDots) {
+            drawDots();
+        }
 
         hudStage.act(Gdx.graphics.getDeltaTime());
         stage.act(Gdx.graphics.getDeltaTime());
@@ -713,6 +733,7 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
         microphones.setHeight(50f);
 
         Vector2 position = MapRasterTiles.getPixelPosition(location.lat, location.lng, beginTile.x, beginTile.y);
+        System.out.println("Microfone.x: " + position.x + ", position.y: " + position.y);
         float shiftAmount = -100f;
         microphones.setPosition(position.x - shiftAmount, position.y);
 
@@ -824,6 +845,19 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             }
         });
 
+        TextButton blockchainButton = new TextButton("Blockchain", skin, "round");
+        blockchainButton.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                showBlockchainDots = !showBlockchainDots;
+                if (showBlockchainDots) {
+                    displayBlockchain();
+                }
+            }
+        });
+
+        Table buttonTable = new Table();
+        buttonTable.defaults().padLeft(30).padRight(30);
 
         TextButton quitButton = new TextButton("Quit", skin, "round");
         quitButton.addListener(new ClickListener() {
@@ -835,12 +869,11 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
             }
         });
 
-        Table buttonTable = new Table();
-        buttonTable.defaults().padLeft(30).padRight(30);
 
         buttonTable.add(langButton).padBottom(15).expandX().fill().row();
         buttonTable.add(eventButton).padBottom(15).expandX().fill().row();
         buttonTable.add(danceButton).padBottom(15).expandX().fill().row();
+        buttonTable.add(blockchainButton).padBottom(15).expandX().fill().row();
         buttonTable.add(quitButton).fillX();
 
 
@@ -876,6 +909,101 @@ public class EMBMap extends ApplicationAdapter implements GestureDetector.Gestur
 
         return buttonTable;
     }
+
+    private void displayBlockchain() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    URL url = new URL("http://192.168.0.100:5002/display_blockchain");
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("Content-Type", "application/json; utf-8");
+                    conn.setRequestProperty("Accept", "application/json");
+                    conn.setDoOutput(true);
+
+                    Json json = new Json();
+                    json.setOutputType(JsonWriter.OutputType.json);
+                    String jsonInputString = json.toJson(new BlockchainRequest(8000));
+
+                    try(java.io.OutputStream os = conn.getOutputStream()) {
+                        byte[] input = jsonInputString.getBytes("UTF-8");
+                        os.write(input, 0, input.length);
+                    }
+
+                    try(java.io.BufferedReader br = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"))) {
+                        StringBuilder response = new StringBuilder();
+                        String responseLine;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+                        JsonValue blockchainJson = json.fromJson(null, response.toString());
+                        parseBlockchainData(blockchainJson);
+                    }
+                } catch (Exception e) {
+                    System.out.println("Error during HTTP request");
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+
+
+    private void parseBlockchainData(JsonValue blockchainJson) {
+        if (blockchainJson == null || !blockchainJson.has("blockchain")) {
+            System.out.println("Invalid blockchain data received.");
+            return;
+        }
+        JsonValue blocks = blockchainJson.get("blockchain");
+        for (JsonValue block : blocks) {
+            String data = block.getString("data", "");
+            if (!data.equals("Genesis Block")) {
+                Pattern pattern = Pattern.compile("Number of people detected: (\\d+), Location: Latitude: ([\\d.-]+), Longitude: ([\\d.-]+)");
+                Matcher matcher = pattern.matcher(data);
+                if (matcher.find()) {
+                    int peopleCount = Integer.parseInt(matcher.group(1));
+                    double latitude = Double.parseDouble(matcher.group(2));
+                    double longitude = Double.parseDouble(matcher.group(3));
+                    BlockchainData blockchainData = new BlockchainData(latitude, longitude, peopleCount);
+                    blockchain.addData(blockchainData);
+                }
+            }
+        }
+        Gdx.app.postRunnable(new Runnable() {
+            @Override
+            public void run() {
+                drawDots();
+            }
+        });
+    }
+
+
+
+    private void drawDots() {
+        shapeRenderer.setProjectionMatrix(camera.combined);
+
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        shapeRenderer.setColor(Color.RED);
+
+        int dotSpacing = 10;
+        for (BlockchainData data : blockchain.blockchainDataList) {
+            for (int i = 0; i < data.peopleCount; i++) {
+                Vector2 position = MapRasterTiles.getPixelPosition(data.latitude, data.longitude, beginTile.x, beginTile.y);
+
+                if (position != null) {
+                    float xOffset = (i % 4) * (i * (-0.1f)) * dotSpacing;
+                    float yOffset = (i % 3) * dotSpacing;
+                    shapeRenderer.circle(position.x + xOffset, position.y + yOffset, 5);
+                    //System.out.println("Drawing dot at position.x: " + (position.x + xOffset) + ", position.y: " + position.y);
+                } else {
+                    System.out.println("Unable to calculate position for latitude: " + data.latitude + ", longitude: " + data.longitude);
+                }
+            }
+        }
+        shapeRenderer.end();
+    }
+
 
 
 }
